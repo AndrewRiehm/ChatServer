@@ -9,13 +9,15 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
+void process_client(int /* client_sock_fd */);
+
 int main(int argc, char** argv)
 {
 	int server_sock_fd, client_sock_fd, port_number;
 	socklen_t client_length;
-	char buffer[256];
 	struct sockaddr_in server_address, client_address;
 	int result = 0;
+	int pid = 0;
 
 	// Create a socket
 	cout << "Creating a socket FD..." << endl;
@@ -76,31 +78,28 @@ int main(int argc, char** argv)
 			{
 				cerr << "Error: could not accept client (errno: " << errno << ")" << endl;
 				close(client_sock_fd);
+				continue;
 			}
-
 			cout << "Got a new client!" << endl;
-			bzero(buffer, 256);
-			result = read(client_sock_fd, buffer, 255);
-			if(result < 0)
-			{
-				cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
-				close(client_sock_fd);
+
+			pid = fork();
+			if(pid == 0)
+			{ 
+				// We're the child - close the server socket, we shouldn't be using it!
+				close(server_sock_fd);
+				
+				// Handle the client
+				process_client(client_sock_fd);
+
+				// Nothing more to do - terminate client process!
+				return 0;
 			}
 			else
 			{
-				cout << "Got a message: " << buffer << endl;
-			}
-
-
-			result = write(client_sock_fd, "Got it!", 7);
-			if(result < 0)
-			{
-				cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
+				// We're the parent - close the client socket, we shouldn't use it!
+				cout << "Spawned child process (pid: " << pid << ")" << endl;
 				close(client_sock_fd);
 			}
-
-			close(client_sock_fd);
-
 		}
 	} 
 	catch(std::exception& e)
@@ -112,4 +111,33 @@ int main(int argc, char** argv)
 	close(server_sock_fd);
 
 	return 0;
+}
+
+void process_client(int client_sock_fd)
+{
+	const int BUF_SIZE = 256;
+	int result = 0;
+	char buffer[BUF_SIZE];
+	bzero(buffer, BUF_SIZE);
+
+	// Read the message from the client
+	result = read(client_sock_fd, buffer, BUF_SIZE-1);
+	if(result < 0)
+	{
+		cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
+		close(client_sock_fd);
+	}
+	else
+	{
+		cout << "Got a message: " << buffer << endl;
+	}
+
+	result = write(client_sock_fd, "Got it!", 7);
+	if(result < 0)
+	{
+		cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
+		close(client_sock_fd);
+	}
+
+	close(client_sock_fd);
 }
