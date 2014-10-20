@@ -96,8 +96,8 @@ int main(int argc, char** argv)
 			}
 			else
 			{
-				// We're the parent - close the client socket, we shouldn't use it!
 				cout << "Spawned child process (pid: " << pid << ")" << endl;
+				// We're the parent - close the client socket, we shouldn't use it!
 				close(client_sock_fd);
 			}
 		}
@@ -132,7 +132,7 @@ void process_client(int client_sock_fd)
 		cout << "Got a message: " << buffer << endl;
 	}
 
-	result = write(client_sock_fd, "Got it!", 7);
+	result = write(client_sock_fd, "Got it!\n", 8);
 	if(result < 0)
 	{
 		cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
