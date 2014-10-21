@@ -1,4 +1,4 @@
 cmake_minimum_required (VERSION 2.8.1)
-project (HELLO)
+project (ChatServer)
 
-add_executable(chat_server server.cpp)
+add_executable(chat_server Server.cpp ClientHandler.cpp)

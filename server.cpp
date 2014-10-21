@@ -5,11 +5,11 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
+#include "ClientHandler.hpp"
+
 using std::cout;
 using std::cerr;
 using std::endl;
-
-void process_client(int /* client_sock_fd */);
 
 int main(int argc, char** argv)
 {
@@ -89,7 +89,8 @@ int main(int argc, char** argv)
 				close(server_sock_fd);
 				
 				// Handle the client
-				process_client(client_sock_fd);
+				ClientHandler handler(client_sock_fd);
+				handler.HandleClient();
 
 				// Nothing more to do - terminate client process!
 				return 0;
@@ -113,31 +114,3 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-void process_client(int client_sock_fd)
-{
-	const int BUF_SIZE = 256;
-	int result = 0;
-	char buffer[BUF_SIZE];
-	bzero(buffer, BUF_SIZE);
-
-	// Read the message from the client
-	result = read(client_sock_fd, buffer, BUF_SIZE-1);
-	if(result < 0)
-	{
-		cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
-		close(client_sock_fd);
-	}
-	else
-	{
-		cout << "Got a message: " << buffer << endl;
-	}
-
-	result = write(client_sock_fd, "Got it!\n", 8);
-	if(result < 0)
-	{
-		cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
-		close(client_sock_fd);
-	}
-
-	close(client_sock_fd);
-}
