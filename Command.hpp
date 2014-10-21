@@ -3,6 +3,7 @@
 #define COMMAND_HPP
 
 #include <string>
+#include <functional>
 
 namespace ChatServer
 {
@@ -11,7 +12,7 @@ struct Command
 {
 	std::string strString;
 	std::string strDescription;
-	void (*Execute)(int, std::string);
+	std::function<void(std::string)> Execute;
 };
 
 }

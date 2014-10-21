@@ -20,8 +20,8 @@ public:
 	~ClientHandler();
 
 	void HandleClient();
+	void LoginHandler(std::string args);
 };
 
-void LoginHandler(int fd, std::string args);
 }
 #endif

@@ -21,7 +21,7 @@ ChatServer::ClientHandler::ClientHandler(int fd)
 	Command login;
 	login.strString = "/login";
 	login.strDescription = "Prompts the user for a login name.";
-	login.Execute = &ChatServer::LoginHandler;
+	login.Execute = std::bind(&ClientHandler::LoginHandler, this, std::placeholders::_1);
 	_mCommands[login.strString] = login;
 }
 
@@ -62,7 +62,7 @@ void ChatServer::ClientHandler::HandleClient()
 	}
 
 	string msg(buffer);
-	msg.erase(msg.length()-2, 2); // Chop off \r\n 
+	msg.erase(msg.length()-2, 2); // Chop off \r\n  TODO: Better way to validate commands
 	// Check to see if we've got a command or a generic chat message
 	if(msg[0] == '/') 
 	{
@@ -70,7 +70,7 @@ void ChatServer::ClientHandler::HandleClient()
 		if(_mCommands.find(msg) != _mCommands.end())
 		{
 			// Found a valid command - execute it!
-			_mCommands[msg].Execute(_iSocketFD, msg);
+			_mCommands[msg].Execute(msg);
 		}
 		else
 		{
@@ -99,7 +99,13 @@ void ChatServer::ClientHandler::HandleClient()
 	close(_iSocketFD);
 }
 
-void ChatServer::LoginHandler(int fd, std::string args)
+void ChatServer::ClientHandler::LoginHandler(std::string args)
 {
 	cout << "Handling a login! args: " << args << endl;
+	string msg = "Gotta login, bro:\n";
+	int result = write(_iSocketFD, msg.c_str(), msg.length());
+	if(result < 0)
+	{
+		cerr << "Error: could not write message to client (errno: " << errno << ")" << endl;
+	}
 }
