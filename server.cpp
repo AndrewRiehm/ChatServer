@@ -89,7 +89,7 @@ int main(int argc, char** argv)
 				close(server_sock_fd);
 				
 				// Handle the client
-				ClientHandler handler(client_sock_fd);
+				ChatServer::ClientHandler handler(client_sock_fd);
 				handler.HandleClient();
 
 				// Nothing more to do - terminate client process!

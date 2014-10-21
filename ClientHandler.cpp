@@ -1,24 +1,50 @@
 
 #include "ClientHandler.hpp"
+#include "Command.hpp"
 
 #include <iostream>
 #include <unistd.h>
+#include <string>
 
 using std::cout;
 using std::endl;
 using std::cerr;
+using std::string;
 
-ClientHandler::ClientHandler(int fd)
+using ChatServer::Command;
+
+ChatServer::ClientHandler::ClientHandler(int fd)
 {
 	_iSocketFD = fd;
+
+	
+	Command login;
+	login.strString = "/login";
+	login.strDescription = "Prompts the user for a login name.";
+	login.Execute = &ChatServer::LoginHandler;
+	_mCommands[login.strString] = login;
 }
 
-ClientHandler::~ClientHandler()
+ChatServer::ClientHandler::~ClientHandler()
 {
 	close(_iSocketFD);
 }
 
-void ClientHandler::HandleClient()
+void ChatServer::ClientHandler::ListCommands()
+{
+	string msg = "Available commands:\n";
+	for(auto& item: _mCommands)
+	{
+		msg += "\t" + item.second.strString + ": " + item.second.strDescription + "\n";
+	}
+	int result = write(_iSocketFD, msg.c_str(), sizeof(char)*msg.length());
+	if(result < 0)
+	{
+		cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
+	}
+}
+
+void ChatServer::ClientHandler::HandleClient()
 {
 	cout << "Handling client on " << _iSocketFD << endl;
 	const int BUF_SIZE = 256;
@@ -32,18 +58,48 @@ void ClientHandler::HandleClient()
 	{
 		cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
 		close(_iSocketFD);
+		return;
+	}
+
+	string msg(buffer);
+	msg.erase(msg.length()-2, 2); // Chop off \r\n 
+	// Check to see if we've got a command or a generic chat message
+	if(msg[0] == '/') 
+	{
+		// Looks like the user wants to issue a command, see if it's valid
+		if(_mCommands.find(msg) != _mCommands.end())
+		{
+			// Found a valid command - execute it!
+			_mCommands[msg].Execute(_iSocketFD, msg);
+		}
+		else
+		{
+			// Not a valid command
+			cerr << "Error: invalid command received from client " << _iSocketFD 
+					 << ": " << msg << endl;
+			ListCommands();
+		}
 	}
 	else
 	{
-		cout << "Got a message: " << buffer << endl;
+		// Got a chat message
+		// TODO: If they're in a room, send the message to that room
+		//       ELSE print an error suggesting they select or create a room
+		cout << "Chat message: " << msg << endl;
+		result = write(_iSocketFD, "Got it!\n", 8);
+		if(result < 0)
+		{
+			cerr << "Error: could not write message to client (errno: " << errno << ")" << endl;
+			close(_iSocketFD);
+		}
 	}
 
-	result = write(_iSocketFD, "Got it!\n", 8);
-	if(result < 0)
-	{
-		cerr << "Error: could not read message from client (errno: " << errno << ")" << endl;
-		close(_iSocketFD);
-	}
+
 
 	close(_iSocketFD);
+}
+
+void ChatServer::LoginHandler(int fd, std::string args)
+{
+	cout << "Handling a login! args: " << args << endl;
 }
