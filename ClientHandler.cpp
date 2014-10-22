@@ -5,6 +5,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <string>
+#include <string.h> // for memset
 
 using std::cout;
 using std::endl;
@@ -21,12 +22,6 @@ ChatServer::ClientHandler::ClientHandler(int fd)
 	//-------------------------------------------------------
 	// Set up the command objects
 	//-------------------------------------------------------
-	Command login;
-	login.strString = "/login";
-	login.strDescription = "Prompts the user for a login name.";
-	login.Execute = std::bind(&ClientHandler::LoginHandler, this, std::placeholders::_1);
-	_mCommands[login.strString] = login;
-
 	Command quit;
 	quit.strString = "/quit";
 	quit.strDescription = "Disconnects from the chat server.  Not for winners.";
@@ -130,6 +125,7 @@ void ChatServer::ClientHandler::LoginHandler(std::string args)
 	}
 
 	WriteString("Welcome, " + _strUserName + "\n");
+  ListCommands();
 }
 
 void ChatServer::ClientHandler::QuitHandler(std::string args)
@@ -197,6 +193,10 @@ std::string ChatServer::ClientHandler::Scrub(const char* buf, const int buf_size
 		{
 			msg += buf[i];
 		}
+    else
+    {
+      msg += ' ';
+    }
 	}
 	return msg;
 }

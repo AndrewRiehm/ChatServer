@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <string.h> // for memset
 
 #include "ClientHandler.hpp"
 
@@ -30,7 +31,7 @@ int main(int argc, char** argv)
 	}
 
 	// Initialize address structure
-	bzero((char*)&server_address, sizeof(server_address));
+	memset((char*)&server_address, '\0', sizeof(server_address));
 	port_number = 4919; // 0x1337
 	server_address.sin_family = AF_INET;
 	server_address.sin_addr.s_addr = INADDR_ANY;
