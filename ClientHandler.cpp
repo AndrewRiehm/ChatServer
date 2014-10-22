@@ -150,7 +150,7 @@ std::string ChatServer::ClientHandler::ReadString()
 	const int BUF_SIZE = 512;
 	int bytesRead = 0;
 	char buffer[BUF_SIZE];
-	bzero(buffer, BUF_SIZE);
+	memset(buffer, '\0', BUF_SIZE);
 
 	// Read the message from the client
 	bytesRead = read(_iSocketFD, buffer, BUF_SIZE-1);
