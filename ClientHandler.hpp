@@ -11,8 +11,10 @@ namespace ChatServer
 class ClientHandler
 {
 private:
-	int _iSocketFD;
-	std::map<std::string, ChatServer::Command> _mCommands;
+	int _iSocketFD; // Socket for talking to the client
+	std::map<std::string, ChatServer::Command> _mCommands; // Command structure
+	std::string _strUserName;
+	std::string _strSelectedRoom;
 
 	// Sends a list of commands to the connected client
 	void ListCommands();
@@ -33,8 +35,15 @@ public:
 	ClientHandler(int fd);
 	~ClientHandler();
 
+	// Main loop
 	void HandleClient();
+
+	// Handles user authentication
 	void LoginHandler(std::string args);
+
+	// Handles the /quit command
+	void QuitHandler(std::string args);
+
 };
 
 }

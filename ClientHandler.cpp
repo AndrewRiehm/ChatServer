@@ -18,11 +18,20 @@ ChatServer::ClientHandler::ClientHandler(int fd)
 	_iSocketFD = fd;
 
 	
+	//-------------------------------------------------------
+	// Set up the command objects
+	//-------------------------------------------------------
 	Command login;
 	login.strString = "/login";
 	login.strDescription = "Prompts the user for a login name.";
 	login.Execute = std::bind(&ClientHandler::LoginHandler, this, std::placeholders::_1);
 	_mCommands[login.strString] = login;
+
+	Command quit;
+	quit.strString = "/quit";
+	quit.strDescription = "Disconnects from the chat server.  Not for winners.";
+	quit.Execute = std::bind(&ClientHandler::QuitHandler, this, std::placeholders::_1);
+	_mCommands[quit.strString] = quit;
 }
 
 ChatServer::ClientHandler::~ClientHandler()
@@ -37,6 +46,7 @@ void ChatServer::ClientHandler::ListCommands()
 	{
 		msg += "\t" + item.second.strString + ": " + item.second.strDescription + "\n";
 	}
+	WriteString(msg);
 }
 
 void ChatServer::ClientHandler::HandleClient()
@@ -44,56 +54,96 @@ void ChatServer::ClientHandler::HandleClient()
 	cout << "Handling client on " << _iSocketFD << endl;
 	int result = 0;
 
-	// Read the message from the client
-	string msg = ReadString(); 
+	// Make them login first
+	LoginHandler("");
 
-	// Check to see if we've got a command or a generic chat message
-	if(msg[0] == '/') 
+	while(true)
 	{
-		// Looks like the user wants to issue a command, see if it's valid
-		if(_mCommands.find(msg) != _mCommands.end())
+		// Read the message from the client
+		string msg = ReadString(); 
+
+		// Check to see if we've got a command or a generic chat message
+		if(msg[0] == '/') 
 		{
-			// Found a valid command - execute it!
-			_mCommands[msg].Execute(msg);
+			// Looks like the user wants to issue a command, see if it's valid
+			if(_mCommands.find(msg) != _mCommands.end())
+			{
+				// Found a valid command - execute it!
+				_mCommands[msg].Execute(msg);
+			}
+			else
+			{
+				// Not a valid command
+				cerr << "Error: invalid command received from client " << _iSocketFD 
+					<< ": " << msg << endl;
+				ListCommands();
+			}
 		}
 		else
 		{
-			// Not a valid command
-			cerr << "Error: invalid command received from client " << _iSocketFD 
-					 << ": " << msg << endl;
-			ListCommands();
-		}
-	}
-	else
-	{
-		// Got a chat message
-		// TODO: If they're in a room, send the message to that room
-		//       ELSE print an error suggesting they select or create a room
-		cout << "Chat message: " << msg << endl;
-		result = write(_iSocketFD, "Got it!\n", 8);
-		if(result < 0)
-		{
-			Bail("could not write to client socket");
+			// Got a chat message
+			// TODO: If they're in a room, send the message to that room
+			//       ELSE print an error suggesting they select or create a room
+			cout << "Chat message: " << msg << endl;
+			result = write(_iSocketFD, "Got it!\n", 8);
+			if(result < 0)
+			{
+				Bail("could not write to client socket");
+			}
 		}
 	}
 
 	close(_iSocketFD);
 }
 
+//---------------------------------------------------------
+// Command handler functions
+//---------------------------------------------------------
 void ChatServer::ClientHandler::LoginHandler(std::string args)
 {
-	int BUF_SIZE = 256;
-	char buffer[BUF_SIZE];
-	bzero(buffer, BUF_SIZE);
-
 	cout << "Handling a login! args: " << args << endl;
-	string msg = "Welcome to the XYZ chat server!\nLogin Name?\n";
-	int result = write(_iSocketFD, msg.c_str(), msg.length());
-	if(result < 0)
+	WriteString("Welcome to the XYZ chat server!\n");
+
+	_strUserName = "";
+	int tries_left = 5;
+	do
 	{
-		cerr << "Error: could not write message to client (errno: " << errno << ")" << endl;
+		WriteString("Login Name?\n");
+		string name = ReadString();
+
+		// TODO: Check database for name collision
+		if(false)
+		{
+			WriteString("Sorry, name taken.\n");
+		}
+		else
+		{
+			// TODO: Persist assignment to DB
+			_strUserName = name;
+		}
+	} while(_strUserName == "" && --tries_left > 0);
+
+	if(tries_left <= 0)
+	{
+		WriteString("Max number of attempts reached.  No soup for you!  Come back one year!\n");
+		Bail("too many invalid login attempts");
 	}
+
+	WriteString("Welcome, " + _strUserName + "\n");
 }
+
+void ChatServer::ClientHandler::QuitHandler(std::string args)
+{
+	// TODO: Remove this user from the chat room
+	cout << _strUserName << " is quitting." << endl;
+	WriteString("BYE\n");
+	close(_iSocketFD);
+	exit(EXIT_SUCCESS);
+}
+
+//---------------------------------------------------------
+// Utility functions
+//---------------------------------------------------------
 
 std::string ChatServer::ClientHandler::ReadString()
 {
@@ -150,3 +200,5 @@ std::string ChatServer::ClientHandler::Scrub(const char* buf, const int buf_size
 	}
 	return msg;
 }
+
+
