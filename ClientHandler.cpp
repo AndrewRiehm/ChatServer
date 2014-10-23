@@ -69,8 +69,8 @@ void ChatServer::ClientHandler::HandleClient()
 			else
 			{
 				// Not a valid command
-				cerr << "Error: invalid command received from client " << _iSocketFD 
-					<< ": " << msg << endl;
+				cerr << "Error: invalid command received from (socket: " << _iSocketFD 
+						 << ", name: " << _strUserName << "): " << msg << endl;
 				ListCommands();
 			}
 		}
