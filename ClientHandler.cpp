@@ -1,8 +1,10 @@
 
 #include "ClientHandler.hpp"
+#include "ChatManager.hpp"
 #include "Command.hpp"
 
 #include <iostream>
+#include <functional>
 #include <unistd.h>
 #include <string>
 #include <string.h> // for memset
@@ -14,11 +16,8 @@ using std::string;
 
 using ChatServer::Command;
 
-ChatServer::ClientHandler::ClientHandler(int fd)
+ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm): _iSocketFD(fd), _cm(cm)
 {
-	_iSocketFD = fd;
-
-	
 	//-------------------------------------------------------
 	// Set up the command objects
 	//-------------------------------------------------------
@@ -32,16 +31,6 @@ ChatServer::ClientHandler::ClientHandler(int fd)
 ChatServer::ClientHandler::~ClientHandler()
 {
 	close(_iSocketFD);
-}
-
-void ChatServer::ClientHandler::ListCommands()
-{
-	string msg = "Available commands:\n";
-	for(auto& item: _mCommands)
-	{
-		msg += "\t" + item.second.strString + ": " + item.second.strDescription + "\n";
-	}
-	WriteString(msg);
 }
 
 void ChatServer::ClientHandler::HandleClient()
@@ -104,17 +93,15 @@ void ChatServer::ClientHandler::LoginHandler(std::string args)
 	do
 	{
 		WriteString("Login Name?\n");
-		string name = ReadString();
+		_strUserName = ReadString();
 
-		// TODO: Check database for name collision
-		if(false)
+		// Check for name collision
+		if(!_cm.AddClient(this))
 		{
 			WriteString("Sorry, name taken.\n");
-		}
-		else
-		{
-			// TODO: Persist assignment to DB
-			_strUserName = name;
+
+			// Try again, name was taken
+			_strUserName = "";
 		}
 	} while(_strUserName == "" && --tries_left > 0);
 
@@ -130,8 +117,7 @@ void ChatServer::ClientHandler::LoginHandler(std::string args)
 
 void ChatServer::ClientHandler::QuitHandler(std::string args)
 {
-	// TODO: Remove this user from the chat room
-	cout << _strUserName << " is quitting." << endl;
+	_cm.RemoveClient(this);
 	WriteString("BYE\n");
 	close(_iSocketFD);
 	exit(EXIT_SUCCESS);
@@ -140,6 +126,22 @@ void ChatServer::ClientHandler::QuitHandler(std::string args)
 //---------------------------------------------------------
 // Utility functions
 //---------------------------------------------------------
+
+void ChatServer::ClientHandler::ListCommands()
+{
+	string msg = "Available commands:\n";
+	for(auto& item: _mCommands)
+	{
+		msg += "\t" + item.second.strString + ": " + item.second.strDescription + "\n";
+	}
+	WriteString(msg);
+}
+
+void ChatServer::ClientHandler::SendMsg(const std::string& msg)
+{
+	// TODO: Wrap this message with any decoration before sending?
+	WriteString(msg);
+}
 
 std::string ChatServer::ClientHandler::ReadString()
 {
@@ -159,7 +161,7 @@ std::string ChatServer::ClientHandler::ReadString()
 	return Scrub(buffer, bytesRead);
 }
 
-void ChatServer::ClientHandler::WriteString(std::string msg)
+void ChatServer::ClientHandler::WriteString(const std::string& msg)
 {
 	int result = write(_iSocketFD, msg.c_str(), sizeof(char)*msg.length());
 	if(result < 0)
@@ -201,4 +203,15 @@ std::string ChatServer::ClientHandler::Scrub(const char* buf, const int buf_size
 	return msg;
 }
 
+//---------------------------------------------------------
+// Getters & setters
+//---------------------------------------------------------
+std::string ChatServer::ClientHandler::GetUserName() const
+{
+	return _strUserName;
+}
 
+std::string ChatServer::ClientHandler::GetCurrentRoom() const
+{
+	return _strCurrentRoom;
+}

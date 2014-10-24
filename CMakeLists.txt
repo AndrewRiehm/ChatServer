@@ -3,4 +3,4 @@ project (ChatServer)
 
 add_definitions(-std=c++11)
 
-add_executable(chat_server Server.cpp ClientHandler.cpp)
+add_executable(chat_server Server.cpp ClientHandler.cpp ChatManager.cpp)

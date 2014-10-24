@@ -1,4 +1,5 @@
 #include <iostream>
+#include <functional>
 #include <cerrno>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -6,6 +7,7 @@
 #include <netinet/in.h>
 #include <string.h> // for memset
 
+#include "ChatManager.hpp"
 #include "ClientHandler.hpp"
 
 using std::cout;
@@ -19,6 +21,10 @@ int main(int argc, char** argv)
 	struct sockaddr_in server_address, client_address;
 	int result = 0;
 	int pid = 0;
+
+	// Create the ChatManager object
+	ChatServer::ChatManager cm;
+
 
 	// Create a socket
 	cout << "Creating a socket FD..." << endl;
@@ -90,7 +96,7 @@ int main(int argc, char** argv)
 				close(server_sock_fd);
 				
 				// Handle the client
-				ChatServer::ClientHandler handler(client_sock_fd);
+				ChatServer::ClientHandler handler(client_sock_fd, std::ref(cm));
 				handler.HandleClient();
 
 				// Nothing more to do - terminate client process!
