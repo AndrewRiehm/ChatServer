@@ -18,6 +18,7 @@ private:
 	std::map<std::string, ChatServer::Command> _mCommands; // Command structure
 	std::string _strUserName;
 	std::string _strCurrentRoom;
+	bool _bDone;
 
 	// Sends a list of commands to the connected client
 	void ListCommands();
@@ -32,10 +33,10 @@ private:
 	std::string Scrub(const char* buf, const int buf_size);
 
 	// In case of emergency, call this
-	void Bail(std::string err);
+	void Bail(const std::string err);
 
 	// Handles user authentication
-	void LoginHandler(std::string args);
+	void LoginHandler();
 
 	// Handles the /quit command
 	void QuitHandler(std::string args);

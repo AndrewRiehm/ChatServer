@@ -1,6 +1,9 @@
 #include <iostream>
 #include <functional>
+#include <vector>
+#include <thread>
 #include <cerrno>
+#include <stdexcept>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -13,6 +16,17 @@
 using std::cout;
 using std::cerr;
 using std::endl;
+using std::vector;
+using std::thread;
+
+using ChatServer::ClientHandler;
+using ChatServer::ChatManager;
+
+void start_processing(int fd, ChatManager& cm)
+{
+	ClientHandler ch(fd, cm);
+	ch.HandleClient();
+}
 
 int main(int argc, char** argv)
 {
@@ -23,8 +37,15 @@ int main(int argc, char** argv)
 	int pid = 0;
 
 	// Create the ChatManager object
-	ChatServer::ChatManager cm;
+	ChatManager cm;
 
+	// Vector of threads for handling clients
+	vector<thread> threads;
+
+	// Vector of client handlers
+	vector<ClientHandler> handlers;
+
+	cout << "Main thread id: " << std::this_thread::get_id() << endl;
 
 	// Create a socket
 	cout << "Creating a socket FD..." << endl;
@@ -62,7 +83,6 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	
-
 	// Listen for connections
 	cout << "Listening..." << endl;
 	result = listen(server_sock_fd, 10);
@@ -75,44 +95,46 @@ int main(int argc, char** argv)
 
 	try
 	{
+		const int MAX_CONNECTIONS=3;
+		int cur_index = 0;
+		thread my_threads[MAX_CONNECTIONS];
 		while(true)
 		{
-			// Accept the connection, fork a new process to respond
-			client_length = sizeof(client_address);
-			client_sock_fd = accept(server_sock_fd, (struct sockaddr*)&client_address, &client_length);
-
-			if(client_sock_fd < 0)
+			if(cur_index < MAX_CONNECTIONS)
 			{
-				cerr << "Error: could not accept client (errno: " << errno << ")" << endl;
-				close(client_sock_fd);
-				continue;
-			}
-			cout << "Got a new client!" << endl;
+				// Accept the connection, spawn a new thread to handle it
+				client_length = sizeof(client_address);
+				client_sock_fd = accept(server_sock_fd, (struct sockaddr*)&client_address, &client_length);
 
-			pid = fork();
-			if(pid == 0)
-			{ 
-				// We're the child - close the server socket, we shouldn't be using it!
-				close(server_sock_fd);
-				
-				// Handle the client
-				ChatServer::ClientHandler handler(client_sock_fd, std::ref(cm));
-				handler.HandleClient();
+				if(client_sock_fd < 0)
+				{
+					cerr << "Error: could not accept client (errno: " << errno << ")" << endl;
+					close(client_sock_fd);
+					continue;
+				}
+				cout << "Got a new client: " << client_sock_fd << endl;
 
-				// Nothing more to do - terminate client process!
-				return 0;
+				my_threads[cur_index++] = thread(start_processing, client_sock_fd, std::ref(cm));
 			}
 			else
 			{
-				cout << "Spawned child process (pid: " << pid << ")" << endl;
-				// We're the parent - close the client socket, we shouldn't use it!
-				close(client_sock_fd);
+				break;
 			}
 		}
+
+		for(int i = 0; i < cur_index; ++i)
+		{
+			my_threads[i].join();
+		}
 	} 
-	catch(std::exception& e)
+	catch(const std::runtime_error& e)
 	{
 		cerr << "Error accepting connections!" << std::endl;
+		cerr << e.what() << endl;
+	}
+	catch(...)
+	{
+		cerr << "NAMELESS EVIL!" << endl;
 	}
 
 	// Clean up the socket
