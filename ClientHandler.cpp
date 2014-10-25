@@ -51,6 +51,12 @@ ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 											 "If no room is specified, shows everyone connected.";
 	who.Execute = std::bind(&ClientHandler::WhoHandler, this, std::placeholders::_1);
 	_mCommands[who.strString] = who;
+
+	Command msg;
+	msg.strString = "/msg";
+	msg.strDescription = "Send private message to user (/msg wilbur salutations!)";
+	msg.Execute = std::bind(&ClientHandler::MsgHandler, this, std::placeholders::_1);
+	_mCommands[msg.strString] = msg;
 }
 
 ChatServer::ClientHandler::~ClientHandler()
@@ -161,6 +167,52 @@ void ChatServer::ClientHandler::WhoHandler(const std::string& args)
 	}
 	str << "end of list" << endl;
 	WriteString(str.str());
+}
+
+void ChatServer::ClientHandler::MsgHandler(const std::string& args)
+{
+	cout << __func__ << endl;
+
+	// Extract the target name from the args (should be first word shape)
+	string dest = "";
+	int i = 0;
+	for(i = 0; i < args.length(); ++i)
+	{
+		if(args[i] >= 'a' && args[i] <= 'z')
+		{
+			dest += args[i];
+		}
+		else
+		{
+			break;
+		}
+	}
+	if(dest.length() <= 0)
+	{
+		WriteString("Invalid destination user specified.\n");
+		return;
+	}
+
+	// See if that's a valid user name
+	for(auto user: _cm.GetUsersIn(""))
+	{
+		if(user == dest)
+		{
+			// We found the right user! Now need to validate message
+			if(args.length() <= dest.length()+1)
+			{
+				WriteString("You must specify a message to send to " + dest + 
+				            "; example: /msg wilbur salutations!\n");
+				return;
+			}
+			string msg = args.substr(i+1);
+			_cm.SendMsgToUser(msg, _strUserName, dest);
+			return;
+		}
+	}
+
+	// Invalid user name
+	WriteString("User '" + dest + "' does not exist.\n");
 }
 
 void ChatServer::ClientHandler::LoginHandler()

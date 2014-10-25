@@ -62,6 +62,9 @@ private:
 	// Lists the people in the room
 	void WhoHandler(const std::string& args);
 
+	// Sends a private message
+	void MsgHandler(const std::string& args);
+
 public:
 	ClientHandler(int fd, ChatManager& cm);
 	~ClientHandler();

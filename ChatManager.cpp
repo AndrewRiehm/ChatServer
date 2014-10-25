@@ -178,5 +178,6 @@ void ChatManager::PostMsgToRoom(
 
 void ChatManager::SendMsgToUser(const string& msg, const string& fromUser, const string& toUser)
 {
-	_mClients[toUser]->SendMsg(fromUser + " whispers: " + msg);
+	_mClients[toUser]->SendMsg(fromUser + " whispers: " + msg + "\n");
+	_mClients[fromUser]->SendMsg("You whisper to " + toUser + ": " + msg + "\n");
 }
