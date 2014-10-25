@@ -9,14 +9,28 @@
 namespace ChatServer
 {
 
+// Forward declaration to avoid circular #include references.
 class ChatManager;
 
+/**
+	Used as return value from ClientHandler::ParseCommand, to encapsulate both a 
+	command string and the remaining arguments.
+**/
 struct CommandMessage
 {
 	std::string CommandString;
 	std::string Args;
 };
 
+/**
+	Handles all interaction with a given client.
+
+	Takes a file descriptor in the constructor, and is intended to manage
+	all sending to and receiving from the client connected on that descriptor.
+
+	Designed to run ClientHandler::HandleClient() in its own thread.  Note that
+	the methods ReadString() and WriteString() are blocking (synchronous).
+**/
 class ClientHandler
 {
 private:
@@ -30,67 +44,69 @@ private:
 	std::string _strCurrentRoom; // Name of room this user is currently in
 	bool _bDone; // Set to false to kill the connection and stop the thread
 
-	// Sends a list of commands to the connected client
+	/**  Sends a list of commands to the connected client **/
 	void ListCommands();
 
-	// Reads a string from the client, scrubs it and returns a std::string
-	// WARNING - THIS WILL BLOCK THE CLIENT - you can't read or write from 
-	// other threads while this is waiting for input.
+	/** 
+	Reads a string from the client, scrubs it and returns a std::string
+	WARNING - THIS WILL BLOCK THE CLIENT - you can't read or write from 
+	other threads while this is waiting for input. 
+	**/
 	std::string ReadString(); 
 
-	// Writes a string to the client
+	/** Writes a string to the client **/
 	void WriteString(const std::string& msg);
 
-	// Scrubs the given buffer for invalid characters, returns a std::string version
+	/** Scrubs the buffer for invalid characters, returns a string version **/
 	std::string Scrub(const std::string& msg);
 
-	// Checks to see if data from the client is waiting on the socket
+	/** Checks to see if data from the client is waiting on the socket **/
 	bool DataPending();
 
-	// Checks to see if the given message is a valid command
+	/** Checks to see if the given message is a valid command **/
 	bool IsCommand(const std::string& msg);
 
-	// Parses the given message into a CommandMessage object
+	/** Parses the given message into a CommandMessage object **/
 	bool ParseCommand(const std::string& msg, ChatServer::CommandMessage& pcmd);
 
-	// In case of emergency, call this
+	/** In case of emergency, call this **/
 	void Bail(const std::string err);
 
-	// Handles user authentication
+	/** Handles user authentication **/
 	void LoginHandler();
 
-	// Handles the /quit command
+	/** Handles the /quit command **/
 	void QuitHandler(std::string args);
 
-	// Handles joining a new room
+	/** Handles joining a new room **/
 	void JoinRoomHandler(const std::string& args);
 
-	// Handles leaving the current room
+	/** Handles leaving the current room **/
 	void LeaveRoomHandler();
 
-	// Lists the given rooms
+	/** Lists the given rooms **/
 	void ListRoomsHandler(const std::string& args);
 
-	// Lists the people in the room
+	/** Lists the people in the room **/
 	void WhoHandler(const std::string& args);
 
-	// Sends a private message
+	/** Sends a private message **/
 	void MsgHandler(const std::string& args);
 
 public:
 	ClientHandler(int fd, ChatManager& cm);
 	~ClientHandler();
 
-	// Main loop
+	/** Main loop **/
 	void HandleClient();
 
-	// Returns the user's name
+	/** Returns the user's name **/
 	std::string GetUserName() const;
 
-	// Returns the current room name
+	/** Returns the current room name **/
 	std::string GetCurrentRoom() const;
 
-	// Sets the current room value
+	/** Sets the current room value **/
 	void SetCurrentRoom(const std::string& room);
 
 	/** Sends the given message to the user. **/

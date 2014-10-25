@@ -8,8 +8,19 @@
 namespace ChatServer
 {
 
+// forward declaration to avoid circular #include references
 class ClientHandler;
 
+/**
+	Manages lists of rooms and attached clients.
+
+	Brokers all communication between clients, keeps track 
+	of who is connected and what rooms they are in, and implements
+	the actual chat server back-end.
+
+	Refers all client-specific error handling / message sending
+	to the ClientHandler.
+**/
 class ChatManager
 {
 private:
@@ -24,14 +35,16 @@ public:
 	ChatManager();
 	~ChatManager();
 
-	// Upper-cases the given string, useful for checking for name matches
+	/** Upper-cases the given string, useful for checking for name matches **/
 	std::string ToUpper(const std::string& str);
 
-	// Returns true if the user exists
+	/** Returns true if the user exists **/
 	bool DoesUserExist(const std::string& user);
 
-	// These are helpful for bypassing case issues and returning the right name.
+	/** Helpful for avoiding case issues and getting the right user name. **/
 	std::string GetProperUserName(const std::string& user);
+
+	/** Helpful for avoiding case issues and getting the right room name. **/
 	std::string GetProperRoomName(const std::string& room);
 
 	/** Gets the current list of room names **/
