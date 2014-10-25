@@ -87,6 +87,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
+	cout << "Server established, listening on port " << port_number << "..." << endl;
 	try
 	{
 		vector<thread> my_threads;

@@ -87,9 +87,18 @@ void ChatServer::ClientHandler::HandleClient()
 	{
 		while(!_bDone)
 		{
-			// Read the message from the client
-			string msg = ReadString(); 
+			// See if there's a message from the client
+			if(!DataPending())
+			{
+				// Nothing to read, or empty message
+				// So sleep for a bit
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
+				// Start over
+				continue;
+			}
+
+			string msg = ReadString(); 
 			CommandMessage pcmd;
 
 			// Check to see if we've got a command or a generic chat message
@@ -151,13 +160,24 @@ void ChatServer::ClientHandler::ListRoomsHandler(const std::string& args)
 
 void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
 {
-	cout << __func__ << endl;
-
 	// Make sure they're not furiously standing still
-	if(args == _strCurrentRoom)
+	if(_cm.ToUpper(args) == _cm.ToUpper(_strCurrentRoom))
 	{
 		WriteString("You stay in " + args + "...\n");
 		return;
+	}
+
+	// Make sure the name doesn't have any weird characters
+	for(int i = 0; i < args.length(); ++i)
+	{
+		// If the current letter isn't A-Za-z0-9, try again.
+		if(!(('A' <= args[i] && args[i] <= 'Z') ||
+		     ('a' <= args[i] && args[i] <= 'z') || 
+				 ('0' <= args[i] && args[i] <= '9')))
+		{
+			WriteString("Invalid room name - must be one word, with only letters and numbers.\n");
+			return;
+		}
 	}
 
 	_cm.SwitchRoom(_strCurrentRoom, args, this);
@@ -167,7 +187,6 @@ void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
 
 void ChatServer::ClientHandler::WhoHandler(const std::string& args)
 {
-	cout << __func__ << endl;
 	std::ostringstream str;
 	auto users = _cm.GetUsersIn(args);
 
@@ -199,8 +218,6 @@ void ChatServer::ClientHandler::WhoHandler(const std::string& args)
 
 void ChatServer::ClientHandler::MsgHandler(const std::string& args)
 {
-	cout << __func__ << endl;
-
 	// Extract the target name from the args (should be first word shape)
 	string dest = "";
 	int i;
@@ -360,29 +377,33 @@ void ChatServer::ClientHandler::SendMsg(const std::string& msg)
 
 std::string ChatServer::ClientHandler::ReadString()
 {
-	std::lock_guard<std::mutex> lock(_mMutex);
 	const int BUF_SIZE = 512;
 	int bytesRead = 0;
 	char buffer[BUF_SIZE];
 	memset(buffer, '\0', BUF_SIZE);
 	string msg = "";
 
+	// There's something to read - so get a lock and read!
+	std::lock_guard<std::mutex> lock(_mMutex);
+
 	// Read all available bytes, create a string, but keep it reasonable
 	int bytesAvailable = 0;
 	do
 	{
 		bytesRead = read(_iSocketFD, buffer, BUF_SIZE);
+
 		if(bytesRead < 0)
 		{
 			// Bail("could not read from client socket");
 			throw std::runtime_error("could not read from client socket.");
 		}
-		ioctl(_iSocketFD, FIONREAD, &bytesAvailable);
 		msg += buffer;
+		ioctl(_iSocketFD, FIONREAD, &bytesAvailable);
 	}
-	while(bytesAvailable > 0 && msg.length() < 4096);
+	while(msg.length() < 4096 && bytesAvailable > 0);
 
-	if(bytesAvailable > 0)
+	// If we get here, and the buffer is at the cap, but there's more data...
+	if(msg.length() >= 4096 && bytesAvailable > 0)
 	{
 		// The client sent way too much stuff, time to kick them
 		throw std::runtime_error("client sent too much data");
@@ -486,6 +507,18 @@ bool ChatServer::ClientHandler::ParseCommand(
 	// If we made it here, we didn't find it.
 	return false;
 }
+
+bool ChatServer::ClientHandler::DataPending()
+{
+	int bytesAvailable = 0;
+	if(ioctl(_iSocketFD, FIONREAD, &bytesAvailable) < 0)
+	{
+		throw std::runtime_error("Could not run ioctl to determine bytes available.");
+	}
+
+	return bytesAvailable > 0;
+}
+
 
 //---------------------------------------------------------
 // Getters & setters

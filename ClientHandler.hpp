@@ -34,6 +34,8 @@ private:
 	void ListCommands();
 
 	// Reads a string from the client, scrubs it and returns a std::string
+	// WARNING - THIS WILL BLOCK THE CLIENT - you can't read or write from 
+	// other threads while this is waiting for input.
 	std::string ReadString(); 
 
 	// Writes a string to the client
@@ -41,6 +43,9 @@ private:
 
 	// Scrubs the given buffer for invalid characters, returns a std::string version
 	std::string Scrub(const std::string& msg);
+
+	// Checks to see if data from the client is waiting on the socket
+	bool DataPending();
 
 	// Checks to see if the given message is a valid command
 	bool IsCommand(const std::string& msg);

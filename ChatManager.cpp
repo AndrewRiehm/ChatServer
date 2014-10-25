@@ -16,12 +16,10 @@ using ChatServer::ChatManager;
 
 ChatManager::ChatManager()
 {
-	cout << "ChatManager constructed!" << endl;
 }
 
 ChatManager::~ChatManager()
 {
-	cout << "ChatManager deconstructed!" << endl;
 }
 
 vector<string> ChatManager::GetRooms()
@@ -66,7 +64,6 @@ vector<string> ChatManager::GetUsersIn(string roomName)
 
 bool ChatManager::AddClient(ChatServer::ClientHandler* client)
 {
-	cout << __func__ << ": " << client->GetUserName() << endl;
 	// Only add the client if the user name does not already exist.
 	string userName = client->GetUserName();
 
@@ -164,23 +161,34 @@ void ChatManager::SwitchRoom(
 		RemoveUserFromRoom(fromRoom, client->GetUserName());
 	}
 
+	string dest = "";
+
 	// Find the toRoom, if it exists
 	if(toRoom != "")
 	{
-		auto newRoom = _mRooms.find(toRoom);
-		if(newRoom == _mRooms.end())
+		string capsTo = ToUpper(toRoom);
+		for(auto r: _mRooms)
 		{
+			if(ToUpper(r.first) == capsTo)
+			{
+				// Found the matching room
+				dest = r.first;
+			}
+		}
+		if(dest == "")
+		{
+			dest = toRoom;
 			// Need to create it, doesn't exist yet.
-			_mRooms[toRoom] = vector<string>();
+			_mRooms[dest] = vector<string>();
 		}
 		// Add the client's name to the room
-		_mRooms[toRoom].push_back(client->GetUserName());
+		_mRooms[dest].push_back(client->GetUserName());
 
 		// Tell everyone about the new member
-		PostMsgToRoom("new user joined chat: " + client->GetUserName(), toRoom, "");
+		PostMsgToRoom("new user joined chat: " + client->GetUserName(), dest, "");
 	}
 
-	client->SetCurrentRoom(toRoom);
+	client->SetCurrentRoom(dest);
 }
 
 void ChatManager::PostMsgToRoom(
