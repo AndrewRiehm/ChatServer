@@ -60,7 +60,7 @@ private:
 	void ListRoomsHandler(const std::string& args);
 
 	// Lists the people in the room
-	void ListPeepsHandler(const std::string& args);
+	void WhoHandler(const std::string& args);
 
 public:
 	ClientHandler(int fd, ChatManager& cm);

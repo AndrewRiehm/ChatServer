@@ -41,15 +41,16 @@ ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 
 	Command joinRoom;
 	joinRoom.strString = "/join";
-	joinRoom.strDescription = "Join the specified chat room.";
+	joinRoom.strDescription = "Join the specified chat room.  Creates the room if it doesn't exist.";
 	joinRoom.Execute = std::bind(&ClientHandler::JoinRoomHandler, this, std::placeholders::_1);
 	_mCommands[joinRoom.strString] = joinRoom;
 
-	Command listPeeps;
-	listPeeps.strString = "/listPeeps";
-	listPeeps.strDescription = "Prints the list of people in the given chat room.";
-	listPeeps.Execute = std::bind(&ClientHandler::ListPeepsHandler, this, std::placeholders::_1);
-	_mCommands[listPeeps.strString] = listPeeps;
+	Command who;
+	who.strString = "/who";
+	who.strDescription = "Prints the list of people in the given chat room.  " 
+											 "If no room is specified, shows everyone connected.";
+	who.Execute = std::bind(&ClientHandler::WhoHandler, this, std::placeholders::_1);
+	_mCommands[who.strString] = who;
 }
 
 ChatServer::ClientHandler::~ClientHandler()
@@ -127,19 +128,39 @@ void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
 	cout << __func__ << endl;
 	_cm.SwitchRoom(_strCurrentRoom, args, this);
 	WriteString("entering room: " + args + "\n");
-	ListPeepsHandler(args);
+	WhoHandler(args);
 }
 
-void ChatServer::ClientHandler::ListPeepsHandler(const std::string& args)
+void ChatServer::ClientHandler::WhoHandler(const std::string& args)
 {
 	cout << __func__ << endl;
+	std::ostringstream str;
 	auto users = _cm.GetUsersIn(args);
-	WriteString("Users in " + args + ":\n");
+
+	// If they asked for an empty / nonexistant room...
+	if(users.size() == 0 && args != "")
+	{
+		str << "Room '" << args << "' does not exist." << endl;
+		WriteString(str.str());
+		return;
+	}
+
+	// If they asked for ALL users
+	if(args == "")
+	{
+		str << "Users connected: " << endl;
+	}
+	// If they asked for a valid room
+	else
+	{
+		str << "Users in " << args << ":" << endl;
+	}
 	for(auto& user: users)
 	{
-		WriteString("  * " + user + "\n");
+		str << "  * " << user << endl;
 	}
-	WriteString("end of list\n");
+	str << "end of list" << endl;
+	WriteString(str.str());
 }
 
 void ChatServer::ClientHandler::LoginHandler()

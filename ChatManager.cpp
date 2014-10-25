@@ -39,9 +39,23 @@ vector<string> ChatManager::GetRooms()
 
 vector<string> ChatManager::GetUsersIn(string roomName)
 {
-	// TODO: MAKE SURE roomName exists!
-
 	vector<string> ret;
+	if(roomName == "")
+	{
+		// Get ALL the users!
+		for(auto& client: _mClients)
+		{
+			ret.push_back(client.first);
+		}
+		return ret;
+	}
+
+	if(_mRooms.find(roomName) == _mRooms.end())
+	{
+		// Room doesn't exist, so nobody in it!
+		return ret;
+	}
+
 	auto& room = _mRooms[roomName];
 	for(auto& user: room)
 	{
