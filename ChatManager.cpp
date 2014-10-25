@@ -22,6 +22,32 @@ ChatManager::~ChatManager()
 {
 }
 
+string ChatManager::GetProperUserName(const std::string& user)
+{
+	string capsUser = ToUpper(user);
+	for(auto client: _mClients)
+	{
+		if(ToUpper(client.first) == capsUser)
+		{
+			return client.first;
+		}
+	}
+	return "";
+}
+
+string ChatManager::GetProperRoomName(const std::string& room)
+{
+	string capsRoom = ToUpper(room);
+	for(auto room: _mRooms)
+	{
+		if(ToUpper(room.first) == capsRoom)
+		{
+			return room.first;
+		}
+	}
+	return "";
+}
+
 vector<string> ChatManager::GetRooms()
 {
 	// TODO: Could this be more efficient, by storing references instead of 
@@ -33,7 +59,6 @@ vector<string> ChatManager::GetRooms()
 	}
 	return ret;
 }
-
 
 vector<string> ChatManager::GetUsersIn(string roomName)
 {

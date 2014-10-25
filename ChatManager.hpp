@@ -30,6 +30,10 @@ public:
 	// Returns true if the user exists
 	bool DoesUserExist(const std::string& user);
 
+	// These are helpful for bypassing case issues and returning the right name.
+	std::string GetProperUserName(const std::string& user);
+	std::string GetProperRoomName(const std::string& room);
+
 	/** Gets the current list of room names **/
 	std::vector<std::string> GetRooms();
 

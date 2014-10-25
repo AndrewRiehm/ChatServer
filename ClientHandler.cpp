@@ -91,8 +91,8 @@ void ChatServer::ClientHandler::HandleClient()
 			if(!DataPending())
 			{
 				// Nothing to read, or empty message
-				// So sleep for a bit
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				// So sleep for a bit - don't want to spin as fast as possible...
+				std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 				// Start over
 				continue;
@@ -129,8 +129,6 @@ void ChatServer::ClientHandler::HandleClient()
 	{
 		cerr << "NAMELESS EVIL!" << endl;
 	}
-
-	close(_iSocketFD);
 }
 
 //---------------------------------------------------------
@@ -152,7 +150,12 @@ void ChatServer::ClientHandler::ListRoomsHandler(const std::string& args)
 	for(auto& room: roomNames)
 	{
 		auto occupants = _cm.GetUsersIn(room);
-		str << "  * " << room << "(" << occupants.size() << ")" << endl;
+		str << "  * " << room << "(" << occupants.size() << ")"; 
+		if(_strCurrentRoom == room)
+		{
+			str << " <-- you are here";
+		}
+		str << endl;
 	}
 	str << "end of list" << endl;
 	WriteString(str.str());
@@ -163,7 +166,7 @@ void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
 	// Make sure they're not furiously standing still
 	if(_cm.ToUpper(args) == _cm.ToUpper(_strCurrentRoom))
 	{
-		WriteString("You stay in " + args + "...\n");
+		WriteString("You stay in " + _strCurrentRoom + "...\n");
 		return;
 	}
 
@@ -181,17 +184,18 @@ void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
 	}
 
 	_cm.SwitchRoom(_strCurrentRoom, args, this);
-	WriteString("entering room: " + args + "\n");
+	WriteString("entering room: " + _strCurrentRoom + "\n");
 	WhoHandler(args);
 }
 
 void ChatServer::ClientHandler::WhoHandler(const std::string& args)
 {
 	std::ostringstream str;
-	auto users = _cm.GetUsersIn(args);
+	string roomName = _cm.GetProperRoomName(args);
+	auto users = _cm.GetUsersIn(roomName);
 
 	// If they asked for an empty / nonexistant room...
-	if(users.size() == 0 && args != "")
+	if(users.size() == 0 && roomName != "")
 	{
 		str << "Room '" << args << "' does not exist." << endl;
 		WriteString(str.str());
@@ -206,11 +210,16 @@ void ChatServer::ClientHandler::WhoHandler(const std::string& args)
 	// If they asked for a valid room
 	else
 	{
-		str << "Users in " << args << ":" << endl;
+		str << "Users in " << roomName << ":" << endl;
 	}
 	for(auto& user: users)
 	{
-		str << "  * " << user << endl;
+		str << "  * " << user; 
+		if(user == _strUserName)
+		{
+			str << " (** this is you)";
+		}
+		str << endl;
 	}
 	str << "end of list" << endl;
 	WriteString(str.str());
@@ -254,6 +263,9 @@ void ChatServer::ClientHandler::MsgHandler(const std::string& args)
 		WriteString("User '" + dest + "' does not exist.\n");
 		return;
 	}
+
+	// Make sure we've got the right representation of the user name
+	dest = _cm.GetProperUserName(dest);
 
 	// We found the right user! Now need to validate message
 	if(args.length() <= dest.length()+1)
@@ -371,7 +383,6 @@ void ChatServer::ClientHandler::ListCommands()
 
 void ChatServer::ClientHandler::SendMsg(const std::string& msg)
 {
-	// TODO: Wrap this message with any decoration before sending?
 	WriteString(msg);
 }
 
