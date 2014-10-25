@@ -175,10 +175,11 @@ void ChatServer::ClientHandler::MsgHandler(const std::string& args)
 
 	// Extract the target name from the args (should be first word shape)
 	string dest = "";
-	int i = 0;
+	int i;
 	for(i = 0; i < args.length(); ++i)
 	{
-		if(args[i] >= 'a' && args[i] <= 'z')
+		if(('a' <= args[i] && args[i] <= 'z') ||
+		   ('A' <= args[i] && args[i] <= 'Z'))
 		{
 			dest += args[i];
 		}
@@ -187,32 +188,39 @@ void ChatServer::ClientHandler::MsgHandler(const std::string& args)
 			break;
 		}
 	}
+
 	if(dest.length() <= 0)
 	{
 		WriteString("Invalid destination user specified.\n");
 		return;
 	}
 
-	// See if that's a valid user name
-	for(auto user: _cm.GetUsersIn(""))
+	// This is an indication of madness. 
+	if(dest == _strUserName)
 	{
-		if(user == dest)
-		{
-			// We found the right user! Now need to validate message
-			if(args.length() <= dest.length()+1)
-			{
-				WriteString("You must specify a message to send to " + dest + 
-				            "; example: /msg wilbur salutations!\n");
-				return;
-			}
-			string msg = args.substr(i+1);
-			_cm.SendMsgToUser(msg, _strUserName, dest);
-			return;
-		}
+		WriteString("Talking to yourself again, eh?\n");
+		return;
 	}
 
-	// Invalid user name
-	WriteString("User '" + dest + "' does not exist.\n");
+	// See if that's a valid user name
+	if(!_cm.DoesUserExist(dest))
+	{
+		// Invalid user name
+		WriteString("User '" + dest + "' does not exist.\n");
+		return;
+	}
+
+	// We found the right user! Now need to validate message
+	if(args.length() <= dest.length()+1)
+	{
+		WriteString("You must specify a message to send to " + dest + 
+				"; example: /msg wilbur salutations!\n");
+		return;
+	}
+
+	// If we made it here, everything's good to go - send the message.
+	string msg = args.substr(i+1);
+	_cm.SendMsgToUser(msg, _strUserName, dest);
 }
 
 void ChatServer::ClientHandler::LoginHandler()
@@ -228,14 +236,44 @@ void ChatServer::ClientHandler::LoginHandler()
 			WriteString("Login Name?\n");
 			_strUserName = ReadString();
 
-			// Check for name collision
-			if(!_cm.AddClient(this))
+			if(_strUserName.length() > MAX_USER_NAME_LENGTH)
 			{
-				WriteString("Sorry, name taken.\n");
+				WriteString("That name's too long.  Try again!\n");
+				_strUserName = "";
+				continue;
+			}
+
+			// Filter out any invalid chars
+			for(int i = 0; i < _strUserName.length(); ++i)
+			{
+				char c = _strUserName[i];
+				if(!(('A' <= c && c <= 'Z') || 
+				     ('a' <= c && c <= 'z')))
+				{
+				 	// If there's an invalid character, TRY AGAIN
+					WriteString("Invalid user name - must only contain letters. Try again!\n");
+					_strUserName = "";
+					break;
+				}
+			}
+			// If we cleared the user name in the previous loop, try again
+			if(_strUserName == "")
+			{
+				continue;
+			}
+
+			// Check for name collision
+			if(_cm.DoesUserExist(_strUserName))
+			{
+				WriteString("That name is taken.  Try again!\n");
 
 				// Try again, name was taken
 				_strUserName = "";
-			}
+				continue;
+			} 
+
+			_cm.AddClient(this);
+
 		} while(_strUserName == "" && --tries_left > 0);
 
 		if(tries_left <= 0)
@@ -332,7 +370,7 @@ void ChatServer::ClientHandler::Bail(const std::string err)
 std::string ChatServer::ClientHandler::Scrub(const std::string& msg)
 {
 	// Make sure every character is ascii, and it ends with null terminator
-	// int of 32-126 inclusive
+	// int of 32-126 inclusive, avoids \t, \n, etc.
 	string scrubbed = "";
 	for(int i = 0; i < msg.length(); ++i)
 	{

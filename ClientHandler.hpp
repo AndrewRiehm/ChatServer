@@ -19,6 +19,8 @@ struct CommandMessage
 class ClientHandler
 {
 private:
+	const int MAX_USER_NAME_LENGTH = 30; // Make sure user names aren't too big
+
 	ChatManager& _cm;
 	int _iSocketFD; // Socket for talking to the client
 	std::map<std::string, ChatServer::Command> _mCommands; // Command structure

@@ -19,9 +19,15 @@ private:
 	// Removes a user from the room, if they exist, and deletes the room if empty.
 	void RemoveUserFromRoom(const std::string& room, const std::string& userName);
 
+	// Upper-cases the given string, useful for checking for name matches
+	std::string ToUpper(const std::string& str);
+
 public:
 	ChatManager();
 	~ChatManager();
+
+	// Returns true if the user exists
+	bool DoesUserExist(const std::string& user);
 
 	/** Gets the current list of room names **/
 	std::vector<std::string> GetRooms();

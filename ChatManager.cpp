@@ -109,6 +109,31 @@ void ChatManager::RemoveUserFromRoom(const std::string& room, const std::string&
 	}
 }
 
+std::string ChatServer::ChatManager::ToUpper(const std::string& msg)
+{
+	string s = "";
+	for(int i = 0; i < msg.length(); ++i)
+	{
+		s += toupper(msg[i]);
+	}
+	return s;
+}
+
+bool ChatManager::DoesUserExist(const std::string& user)
+{
+	string capsUser = ToUpper(user);
+	for(auto& client: _mClients)
+	{
+		string name = ToUpper(client.second->GetUserName());
+		if(name == capsUser)
+		{
+			return true;
+		}
+		cout << "\t" << name << " != " << capsUser << endl;
+	}
+	return false;
+}
+
 void ChatManager::RemoveClient(ChatServer::ClientHandler* client)
 {
 	// TODO: Thread safety!
@@ -178,6 +203,49 @@ void ChatManager::PostMsgToRoom(
 
 void ChatManager::SendMsgToUser(const string& msg, const string& fromUser, const string& toUser)
 {
-	_mClients[toUser]->SendMsg(fromUser + " whispers: " + msg + "\n");
-	_mClients[fromUser]->SendMsg("You whisper to " + toUser + ": " + msg + "\n");
+	string capsToUser = ToUpper(toUser);
+	string capsFromUser = ToUpper(fromUser);
+	ClientHandler* clientTo = NULL; 
+	ClientHandler* clientFrom = NULL;
+
+	// Find the clients (to and from) in a case-insensitive way
+	for(auto client: _mClients)
+	{
+		string name = ToUpper(client.second->GetUserName());
+		if(name == capsToUser)
+		{
+			clientTo = client.second;
+		}
+		else if(name == capsFromUser)
+		{
+			clientFrom = client.second;
+		}
+	}
+
+	if(clientTo == NULL)
+	{
+		// If we don't have a valid destination, then this makes no sense
+		// COMPLAIN LOUDLY!
+		throw std::runtime_error("Invalid users in SendMsgToUser (" + fromUser + ", " + toUser + ")");
+	}
+
+	if(clientFrom != NULL)
+	{
+		// We might not have a valid "from" user - but if we do, show this
+		clientFrom->SendMsg("You whisper to " + clientTo->GetUserName() + ": " + msg + "\n");
+
+		// Send the message to the target
+		clientTo->SendMsg(clientFrom->GetUserName() + " whispers: " + msg + "\n");
+	}
+	else
+	{
+		// Send the message to the target
+		clientTo->SendMsg(fromUser + " whispers: " + msg + "\n");
+
+		// The "from" might be from the sys admin, or $DEITY, or an AI, in which
+		// case we just show "$DEITY whispers: <msg>", but we don't need to (and 
+		// probably can't) show $DEITY the corresponding message, because they're
+		// not in the list of clients.
+	}
 }
+
