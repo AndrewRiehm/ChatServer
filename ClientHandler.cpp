@@ -21,7 +21,6 @@ using ChatServer::Command;
 ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 	: _iSocketFD(fd), _cm(cm), _bDone(false)
 {
-	cout << "Constructing new ClientHandler (" << fd << ")" << endl;
 	//-------------------------------------------------------
 	// Set up the command objects
 	//-------------------------------------------------------
@@ -30,17 +29,33 @@ ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 	quit.strDescription = "Disconnects from the chat server.  Not for winners.";
 	quit.Execute = std::bind(&ClientHandler::QuitHandler, this, std::placeholders::_1);
 	_mCommands[quit.strString] = quit;
+
+	Command listRooms;
+	listRooms.strString = "/rooms";
+	listRooms.strDescription = "List the available chat rooms.";
+	listRooms.Execute = std::bind(&ClientHandler::ListRoomsHandler, this, std::placeholders::_1);
+	_mCommands[listRooms.strString] = listRooms;
+
+	Command joinRoom;
+	joinRoom.strString = "/join";
+	joinRoom.strDescription = "Join the specified chat room.";
+	joinRoom.Execute = std::bind(&ClientHandler::JoinRoomHandler, this, std::placeholders::_1);
+	_mCommands[joinRoom.strString] = joinRoom;
+
+	Command listPeeps;
+	listPeeps.strString = "/listPeeps";
+	listPeeps.strDescription = "Prints the list of people in the given chat room.";
+	listPeeps.Execute = std::bind(&ClientHandler::ListPeepsHandler, this, std::placeholders::_1);
+	_mCommands[listPeeps.strString] = listPeeps;
 }
 
 ChatServer::ClientHandler::~ClientHandler()
 {
-	cout << "Destructing thread id: " << std::this_thread::get_id() << endl;
 	close(_iSocketFD);
 }
 
 void ChatServer::ClientHandler::HandleClient()
 {
-	cout << "Handling client on " << _iSocketFD << endl;
 	int result = 0;
 
 	// Make them login first
@@ -53,34 +68,24 @@ void ChatServer::ClientHandler::HandleClient()
 			// Read the message from the client
 			string msg = ReadString(); 
 
+			CommandMessage pcmd;
+
 			// Check to see if we've got a command or a generic chat message
-			if(msg[0] == '/') 
+			if(ParseCommand(msg, std::ref(pcmd)))
 			{
-				// Looks like the user wants to issue a command, see if it's valid
-				if(_mCommands.find(msg) != _mCommands.end())
-				{
-					// Found a valid command - execute it!
-					_mCommands[msg].Execute(msg);
-				}
-				else
-				{
-					// Not a valid command
-					cerr << "Error: invalid command received from (socket: " << _iSocketFD 
-						<< ", name: " << _strUserName << "): " << msg << endl;
-					ListCommands();
-				}
+				_mCommands[pcmd.CommandString].Execute(pcmd.Args);
+			}
+			else if(_strCurrentRoom != "") 
+			{
+				// If they're in a chat room, post a msg
+				_cm.PostMsgToRoom(msg, _strCurrentRoom, _strUserName);
 			}
 			else
 			{
-				// Got a chat message
-				// TODO: If they're in a room, send the message to that room
-				//       ELSE print an error suggesting they select or create a room
-				cout << "Chat message: " << msg << endl;
-				result = write(_iSocketFD, "Got it!\n", 8);
-				if(result < 0)
-				{
-					Bail("could not write to client socket");
-				}
+				// They're not in a chat room, and they didn't issue a command
+				// So suggest something helpful
+				WriteString("Please join a chat room before trying to post a message.\n");
+				ListCommands();
 			}
 		}
 	} 
@@ -100,10 +105,39 @@ void ChatServer::ClientHandler::HandleClient()
 //---------------------------------------------------------
 // Command handler functions
 //---------------------------------------------------------
+void ChatServer::ClientHandler::ListRoomsHandler(const std::string& args)
+{
+	WriteString("Active rooms are: \n");
+	auto roomNames = _cm.GetRooms();
+	for(auto& room: roomNames)
+	{
+		WriteString("  * " + room + "\n");
+	}
+	WriteString("end of list\n");
+}
+
+void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
+{
+	cout << __func__ << endl;
+	_cm.SwitchRoom(_strCurrentRoom, args, this);
+	WriteString("entering room: " + args + "\n");
+	ListPeepsHandler(args);
+}
+
+void ChatServer::ClientHandler::ListPeepsHandler(const std::string& args)
+{
+	cout << __func__ << endl;
+	auto users = _cm.GetUsersIn(args);
+	WriteString("Users in " + args + ":\n");
+	for(auto& user: users)
+	{
+		WriteString("  * " + user + "\n");
+	}
+	WriteString("end of list\n");
+}
+
 void ChatServer::ClientHandler::LoginHandler()
 {
-	cout << "Handling a login!" << endl;
-
 	try
 	{
 		WriteString("Welcome to the XYZ chat server!\n");
@@ -189,7 +223,6 @@ std::string ChatServer::ClientHandler::ReadString()
 
 void ChatServer::ClientHandler::WriteString(const std::string& msg)
 {
-	cout << __func__ << ": " << msg << endl;
 	int result = write(_iSocketFD, msg.c_str(), sizeof(char)*msg.length());
 	if(result < 0)
 	{
@@ -230,6 +263,59 @@ std::string ChatServer::ClientHandler::Scrub(const char* buf, const int buf_size
 	return msg;
 }
 
+bool ChatServer::ClientHandler::ParseCommand(
+       const std::string& msg, 
+			 ChatServer::CommandMessage& pcmd)
+{
+	// If the string doesn't start with '/', it's not a command.
+	if(msg[0] != '/')
+	{
+		return false;
+	}
+
+	string cmd = "/";
+	for(int i = 1; i < msg.length(); ++i)
+	{
+		// Accumulate all the characters until the first non-[a-z] char
+		// (after the initial '/')
+		if(msg[i] >= 'a' && msg[i] <= 'z')
+		{
+			cmd += msg[i];
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	// If the length of accumulated chars is 0, we don't have a command.
+	if(cmd.length() <= 1)
+	{
+		return false;
+	}
+
+	// We MIGHT have an actual command - search command structure
+	if(_mCommands.find(cmd) != _mCommands.end())
+	{
+		// Found a valid command!
+		pcmd.CommandString = cmd;
+
+		// Now might have to deal with args
+		if(msg.length() - cmd.length() > 0)
+		{
+			pcmd.Args = msg.substr(pcmd.CommandString.length()+1);
+		}
+		else
+		{
+			pcmd.Args = msg.substr(pcmd.CommandString.length()); 
+		}
+		return true;
+	}
+	
+	// If we made it here, we didn't find it.
+	return false;
+}
+
 //---------------------------------------------------------
 // Getters & setters
 //---------------------------------------------------------
@@ -241,4 +327,9 @@ std::string ChatServer::ClientHandler::GetUserName() const
 std::string ChatServer::ClientHandler::GetCurrentRoom() const
 {
 	return _strCurrentRoom;
+}
+
+void ChatServer::ClientHandler::SetCurrentRoom(const std::string& room)
+{
+	_strCurrentRoom = room;
 }

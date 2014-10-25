@@ -45,10 +45,7 @@ int main(int argc, char** argv)
 	// Vector of client handlers
 	vector<ClientHandler> handlers;
 
-	cout << "Main thread id: " << std::this_thread::get_id() << endl;
-
 	// Create a socket
-	cout << "Creating a socket FD..." << endl;
 	server_sock_fd = socket(PF_INET, SOCK_STREAM, 0);
 
 	if(server_sock_fd < 0)
@@ -65,7 +62,6 @@ int main(int argc, char** argv)
 	server_address.sin_port = htons(port_number);
 
 	// Make sure the port is not in use.
-	cout << "Setting socket options..." << endl;
 	int yes = 1;
 	result = setsockopt(server_sock_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
 	if(result != 0)
@@ -75,7 +71,6 @@ int main(int argc, char** argv)
 	}
 
 	// Bind
-	cout << "Binding..." << endl;
 	result = bind(server_sock_fd, (struct sockaddr*)&server_address, sizeof(server_address));
 	if(result != 0)
 	{
@@ -84,7 +79,6 @@ int main(int argc, char** argv)
 	}
 	
 	// Listen for connections
-	cout << "Listening..." << endl;
 	result = listen(server_sock_fd, 10);
 	if(result != 0)
 	{
@@ -95,36 +89,21 @@ int main(int argc, char** argv)
 
 	try
 	{
-		const int MAX_CONNECTIONS=3;
-		int cur_index = 0;
-		thread my_threads[MAX_CONNECTIONS];
+		vector<thread> my_threads;
 		while(true)
 		{
-			if(cur_index < MAX_CONNECTIONS)
+			// Accept the connection, spawn a new thread to handle it
+			client_length = sizeof(client_address);
+			client_sock_fd = accept(server_sock_fd, (struct sockaddr*)&client_address, &client_length);
+
+			if(client_sock_fd < 0)
 			{
-				// Accept the connection, spawn a new thread to handle it
-				client_length = sizeof(client_address);
-				client_sock_fd = accept(server_sock_fd, (struct sockaddr*)&client_address, &client_length);
-
-				if(client_sock_fd < 0)
-				{
-					cerr << "Error: could not accept client (errno: " << errno << ")" << endl;
-					close(client_sock_fd);
-					continue;
-				}
-				cout << "Got a new client: " << client_sock_fd << endl;
-
-				my_threads[cur_index++] = thread(start_processing, client_sock_fd, std::ref(cm));
+				cerr << "Error: could not accept client (errno: " << errno << ")" << endl;
+				close(client_sock_fd);
+				continue;
 			}
-			else
-			{
-				break;
-			}
-		}
 
-		for(int i = 0; i < cur_index; ++i)
-		{
-			my_threads[i].join();
+			my_threads.push_back(thread(start_processing, client_sock_fd, std::ref(cm)));
 		}
 	} 
 	catch(const std::runtime_error& e)

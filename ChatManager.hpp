@@ -16,6 +16,9 @@ private:
 	std::map<std::string, std::vector<std::string> > _mRooms; // room name -> list of user names
 	std::map<std::string, ChatServer::ClientHandler*> _mClients; // user name -> client object
 
+	// Removes a user from the room, if they exist, and deletes the room if empty.
+	void RemoveUserFromRoom(const std::string& room, const std::string& userName);
+
 public:
 	ChatManager();
 	~ChatManager();
@@ -40,11 +43,14 @@ public:
 	void SwitchRoom(
 	       const std::string fromRoom, 
 				 const std::string toRoom, 
-				 ChatServer::ClientHandler& client
+				 ChatServer::ClientHandler* client
 				 );
 
 	/** Posts the given message to all users in the given room **/
-	void PostMsgToRoom(const std::string& msg, const std::string& roomName);
+	void PostMsgToRoom(
+	       const std::string& msg, 
+				 const std::string& roomName, 
+				 const std::string& fromUser);
 
 	/** Sends a private message from the specified user to the other one. **/
 	void SendMsgToUser(
