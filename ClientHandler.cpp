@@ -4,6 +4,7 @@
 #include "Command.hpp"
 
 #include <iostream>
+#include <sstream>
 #include <functional>
 #include <unistd.h>
 #include <string>
@@ -109,13 +110,16 @@ void ChatServer::ClientHandler::HandleClient()
 //---------------------------------------------------------
 void ChatServer::ClientHandler::ListRoomsHandler(const std::string& args)
 {
-	WriteString("Active rooms are: \n");
+	std::ostringstream str;
+	str << "Active rooms are: " << endl;
 	auto roomNames = _cm.GetRooms();
 	for(auto& room: roomNames)
 	{
-		WriteString("  * " + room + "\n");
+		auto occupants = _cm.GetUsersIn(room);
+		str << "  * " << room << "(" << occupants.size() << ")" << endl;
 	}
-	WriteString("end of list\n");
+	str << "end of list" << endl;
+	WriteString(str.str());
 }
 
 void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
