@@ -13,6 +13,7 @@ class ClientHandler;
 class ChatManager
 {
 private:
+	std::mutex _mMutex; // Avoid threading problems
 	std::map<std::string, std::vector<std::string> > _mRooms; // room name -> list of user names
 	std::map<std::string, ChatServer::ClientHandler*> _mClients; // user name -> client object
 

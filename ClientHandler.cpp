@@ -360,6 +360,7 @@ void ChatServer::ClientHandler::SendMsg(const std::string& msg)
 
 std::string ChatServer::ClientHandler::ReadString()
 {
+	std::lock_guard<std::mutex> lock(_mMutex);
 	const int BUF_SIZE = 512;
 	int bytesRead = 0;
 	char buffer[BUF_SIZE];
@@ -392,6 +393,7 @@ std::string ChatServer::ClientHandler::ReadString()
 
 void ChatServer::ClientHandler::WriteString(const std::string& msg)
 {
+	std::lock_guard<std::mutex> lock(_mMutex);
 	int result = write(_iSocketFD, msg.c_str(), sizeof(char)*msg.length());
 	if(result < 0)
 	{
@@ -500,5 +502,6 @@ std::string ChatServer::ClientHandler::GetCurrentRoom() const
 
 void ChatServer::ClientHandler::SetCurrentRoom(const std::string& room)
 {
+	std::lock_guard<std::mutex> lock(_mMutex);
 	_strCurrentRoom = room;
 }

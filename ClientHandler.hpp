@@ -2,6 +2,7 @@
 #define CLIENT_HANDLER_HPP
 
 #include <map>
+#include <mutex>
 #include <string>
 #include "Command.hpp"
 
@@ -21,6 +22,7 @@ class ClientHandler
 private:
 	const int MAX_USER_NAME_LENGTH = 30; // Make sure user names aren't too big
 
+	std::mutex _mMutex; // To avoid threading issues when reading/writing
 	ChatManager& _cm;
 	int _iSocketFD; // Socket for talking to the client
 	std::map<std::string, ChatServer::Command> _mCommands; // Command structure

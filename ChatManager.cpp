@@ -66,11 +66,11 @@ vector<string> ChatManager::GetUsersIn(string roomName)
 
 bool ChatManager::AddClient(ChatServer::ClientHandler* client)
 {
-	// TODO: THREAD SAFETY
 	cout << __func__ << ": " << client->GetUserName() << endl;
-
 	// Only add the client if the user name does not already exist.
 	string userName = client->GetUserName();
+
+	std::lock_guard<std::mutex> lock(_mMutex);
 	if(_mClients.find(userName) == _mClients.end())
 	{
 		_mClients[userName] = client;
@@ -81,7 +81,7 @@ bool ChatManager::AddClient(ChatServer::ClientHandler* client)
 
 void ChatManager::RemoveUserFromRoom(const std::string& room, const std::string& userName)
 {
-	// TODO: THREAD SAFETY!
+	std::lock_guard<std::mutex> lock(_mMutex);
 
 	// Remove the user from the room they're in,
 	// if they're in a room
@@ -139,13 +139,13 @@ bool ChatManager::DoesUserExist(const std::string& user)
 
 void ChatManager::RemoveClient(ChatServer::ClientHandler* client)
 {
-	// TODO: Thread safety!
 	string room = client->GetCurrentRoom();
 	string userName = client->GetUserName();
 
 	RemoveUserFromRoom(room, userName);
 
 	// Remove the user from the list of clients
+	std::lock_guard<std::mutex> lock(_mMutex);
 	auto it=_mClients.find(client->GetUserName());
 	if(it != _mClients.end())
 	{
