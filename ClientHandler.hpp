@@ -58,6 +58,9 @@ private:
 	// Handles joining a new room
 	void JoinRoomHandler(const std::string& args);
 
+	// Handles leaving the current room
+	void LeaveRoomHandler();
+
 	// Lists the given rooms
 	void ListRoomsHandler(const std::string& args);
 

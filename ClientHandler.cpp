@@ -45,6 +45,12 @@ ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 	joinRoom.Execute = std::bind(&ClientHandler::JoinRoomHandler, this, std::placeholders::_1);
 	_mCommands[joinRoom.strString] = joinRoom;
 
+	Command leaveRoom;
+	leaveRoom.strString = "/leave";
+	leaveRoom.strDescription = "Leaves the current chat room.";
+	leaveRoom.Execute = std::bind(&ClientHandler::LeaveRoomHandler, this);
+	_mCommands[leaveRoom.strString] = leaveRoom;
+
 	Command who;
 	who.strString = "/who";
 	who.strDescription = "Prints the list of people in the given chat room.  " 
@@ -124,8 +130,16 @@ void ChatServer::ClientHandler::HandleClient()
 void ChatServer::ClientHandler::ListRoomsHandler(const std::string& args)
 {
 	std::ostringstream str;
-	str << "Active rooms are: " << endl;
 	auto roomNames = _cm.GetRooms();
+
+	// If there aren't any rooms, let them know.
+	if(roomNames.size() <= 0)
+	{
+		WriteString("No active rooms.  Make one with '/join " + _strUserName + "sPartyTimeLounge'!\n");
+		return;
+	}
+
+	str << "Active rooms are: " << endl;
 	for(auto& room: roomNames)
 	{
 		auto occupants = _cm.GetUsersIn(room);
@@ -237,11 +251,22 @@ void ChatServer::ClientHandler::MsgHandler(const std::string& args)
 	_cm.SendMsgToUser(msg, _strUserName, dest);
 }
 
+void ChatServer::ClientHandler::LeaveRoomHandler()
+{
+	// Sanity check
+	if(_strCurrentRoom == "")
+	{
+		WriteString("You can't leave a room you never joined...\n");
+		return;
+	}
+	_cm.SwitchRoom(_strCurrentRoom, "", this);
+}
+
 void ChatServer::ClientHandler::LoginHandler()
 {
 	try
 	{
-		WriteString("Welcome to the XYZ chat server!\n");
+		WriteString("Welcome to this world!!\n");
 
 		_strUserName = "";
 		int tries_left = 5;
