@@ -36,7 +36,7 @@ private:
 	void WriteString(const std::string& msg);
 
 	// Scrubs the given buffer for invalid characters, returns a std::string version
-	std::string Scrub(const char* buf, const int buf_size);
+	std::string Scrub(const std::string& msg);
 
 	// Checks to see if the given message is a valid command
 	bool IsCommand(const std::string& msg);

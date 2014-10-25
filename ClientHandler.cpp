@@ -11,6 +11,8 @@
 #include <stdexcept>
 #include <thread>
 
+#include <sys/ioctl.h>
+
 using std::cout;
 using std::endl;
 using std::cerr;
@@ -208,17 +210,30 @@ std::string ChatServer::ClientHandler::ReadString()
 	int bytesRead = 0;
 	char buffer[BUF_SIZE];
 	memset(buffer, '\0', BUF_SIZE);
+	string msg = "";
 
-	// Read the message from the client
-	bytesRead = read(_iSocketFD, buffer, BUF_SIZE-1);
-	if(bytesRead < 0)
+	// Read all available bytes, create a string, but keep it reasonable
+	int bytesAvailable = 0;
+	do
 	{
-		// Bail("could not read from client socket");
-		throw std::runtime_error("could not read from client socket.");
+		bytesRead = read(_iSocketFD, buffer, BUF_SIZE);
+		if(bytesRead < 0)
+		{
+			// Bail("could not read from client socket");
+			throw std::runtime_error("could not read from client socket.");
+		}
+		ioctl(_iSocketFD, FIONREAD, &bytesAvailable);
+		msg += buffer;
 	}
-	buffer[bytesRead] = '\0'; // Forcibly null-terminate the char buffer
+	while(bytesAvailable > 0 && msg.length() < 4096);
 
-	return Scrub(buffer, bytesRead);
+	if(bytesAvailable > 0)
+	{
+		// The client sent way too much stuff, time to kick them
+		throw std::runtime_error("client sent too much data");
+	}
+
+	return Scrub(msg);
 }
 
 void ChatServer::ClientHandler::WriteString(const std::string& msg)
@@ -237,30 +252,30 @@ void ChatServer::ClientHandler::Bail(const std::string err)
 	_bDone = true;
 }
 
-std::string ChatServer::ClientHandler::Scrub(const char* buf, const int buf_size)
+std::string ChatServer::ClientHandler::Scrub(const std::string& msg)
 {
 	// Make sure every character is ascii, and it ends with null terminator
 	// int of 32-126 inclusive
-	string msg = "";
-	for(int i = 0; i < buf_size; ++i)
+	string scrubbed = "";
+	for(int i = 0; i < msg.length(); ++i)
 	{
-		if(buf[i] == '\0' || buf[i] == '\n' || buf[i] == '\r')
+		if(msg[i] == '\0' || msg[i] == '\n' || msg[i] == '\r')
 		{
 			// Found a null-terminator - this should be the end of the string
 			// Also, assume that \n or \r signal the end of a message
-			return msg;
+			return scrubbed;
 		}
 
-		if((buf[i] >= 32 && buf[i] <= 126)) 
+		if((msg[i] >= 32 && msg[i] <= 126)) 
 		{
-			msg += buf[i];
+			scrubbed += msg[i];
 		}
     else
     {
-      msg += ' ';
+      scrubbed += ' ';
     }
 	}
-	return msg;
+	return scrubbed;
 }
 
 bool ChatServer::ClientHandler::ParseCommand(
