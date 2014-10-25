@@ -85,24 +85,28 @@ void ChatManager::RemoveUserFromRoom(const std::string& room, const std::string&
 
 	// Remove the user from the room they're in,
 	// if they're in a room
+	string capsUser = ToUpper(userName);
 	if(room != "" && _mRooms.find(room) != _mRooms.end())
 	{
 		auto names = _mRooms[room];
 		for(int i = 0; i < names.size(); ++i)
 		{
-			if(names[i] == userName)
+			if(ToUpper(names[i]) == capsUser)
 			{	
+				// We found the user in the room, now need to delete them and notify
 				names.erase(names.begin()+i);
 				if(names.size() > 0)
 				{
 					// If there are still people in the room, save that
 					_mRooms[room] = names;
+					PostMsgToRoom(userName + " has left " + room, room, "");
 				}
 				else
 				{
 					// If there's nobody in the room, delete it.
 					_mRooms.erase(room);
 				}
+				_mClients[userName]->SendMsg("* You have left " + room + "\n");
 				break;
 			}
 		}
@@ -129,7 +133,6 @@ bool ChatManager::DoesUserExist(const std::string& user)
 		{
 			return true;
 		}
-		cout << "\t" << name << " != " << capsUser << endl;
 	}
 	return false;
 }
@@ -172,6 +175,9 @@ void ChatManager::SwitchRoom(
 		}
 		// Add the client's name to the room
 		_mRooms[toRoom].push_back(client->GetUserName());
+
+		// Tell everyone about the new member
+		PostMsgToRoom("new user joined chat: " + client->GetUserName(), toRoom, "");
 	}
 
 	client->SetCurrentRoom(toRoom);
@@ -192,7 +198,15 @@ void ChatManager::PostMsgToRoom(
 	auto users = _mRooms[roomName];
 
 	// Format the message
-	string m = "[" + roomName + "] " + fromUser + ": " + msg + "\n";
+	string  m = "";
+	if(fromUser != "")
+	{
+		m = "[" + roomName + "] " + fromUser + ": " + msg + "\n";
+	}
+	else
+	{
+		m = "* " + msg + "\n";
+	}
 
 	// Send it to all associated users
 	for(auto& user: users)

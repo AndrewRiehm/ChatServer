@@ -138,6 +138,14 @@ void ChatServer::ClientHandler::ListRoomsHandler(const std::string& args)
 void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
 {
 	cout << __func__ << endl;
+
+	// Make sure they're not furiously standing still
+	if(args == _strCurrentRoom)
+	{
+		WriteString("You stay in " + args + "...\n");
+		return;
+	}
+
 	_cm.SwitchRoom(_strCurrentRoom, args, this);
 	WriteString("entering room: " + args + "\n");
 	WhoHandler(args);
@@ -202,9 +210,9 @@ void ChatServer::ClientHandler::MsgHandler(const std::string& args)
 	}
 
 	// This is an indication of madness. 
-	if(dest == _strUserName)
+	if(_cm.ToUpper(dest) == _cm.ToUpper(_strUserName))
 	{
-		WriteString("Talking to yourself again, eh?\n");
+		WriteString("Talking to yourself again, eh " + _strUserName + "?\n");
 		return;
 	}
 
