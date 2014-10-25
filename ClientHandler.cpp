@@ -57,6 +57,12 @@ ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 	msg.strDescription = "Send private message to user (/msg wilbur salutations!)";
 	msg.Execute = std::bind(&ClientHandler::MsgHandler, this, std::placeholders::_1);
 	_mCommands[msg.strString] = msg;
+
+	Command help;
+	help.strString = "/help";
+	help.strDescription = "Prints this list, but only when you recognize you need to ask for it.";
+	help.Execute = std::bind(&ClientHandler::ListCommands, this);
+	_mCommands[help.strString] = help;
 }
 
 ChatServer::ClientHandler::~ClientHandler()
