@@ -9,6 +9,8 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <string.h> // for memset
+#include <pwd.h> // getpwnam
+#include <syslog.h> // syslog!
 
 #include "ChatManager.hpp"
 #include "ClientHandler.hpp"
@@ -22,10 +24,44 @@ using std::thread;
 using ChatServer::ClientHandler;
 using ChatServer::ChatManager;
 
+const char* DROP_TO_USER = "chatserv";
+const char* DROP_TO_GROUP = "chatgroup";
+
 void start_processing(int fd, ChatManager& cm)
 {
 	ClientHandler ch(fd, cm);
 	ch.HandleClient();
+}
+
+uid_t get_uid_by_name(const char *name)
+{
+	if(name) {
+		struct passwd *pwd = getpwnam(name); /* don't free, see getpwnam() for details */
+		if(pwd) return pwd->pw_uid;
+	}
+	return -1;
+}
+
+gid_t get_gid_by_name(const char *name)
+{
+	if(name) {
+		struct passwd *pwd = getpwnam(name); /* don't free, see getpwnam() for details */
+		if(pwd) return pwd->pw_gid;
+	}
+	return -1;
+}
+
+void bail(const char* msg)
+{
+	// Log the error
+	syslog(LOG_ALERT, "Bailing: %s", msg);
+	syslog(LOG_ALERT, "Errno: %s", strerror(errno));
+
+	// Close out the logs
+	closelog();
+
+	// Exit with EXIT_FAILURE
+	exit(EXIT_FAILURE);
 }
 
 int main(int argc, char** argv)
@@ -35,6 +71,41 @@ int main(int argc, char** argv)
 	struct sockaddr_in server_address, client_address;
 	int result = 0;
 	int pid = 0;
+
+	// Open syslog, only log LOG_NOTICE and above
+	setlogmask(LOG_UPTO (LOG_NOTICE));
+	openlog(argv[0], LOG_CONS | LOG_PID, 0);
+
+	// We don't want to run as root - that's bad!
+	if(getuid() == 0)
+	{
+		// Try to switch to the chatserv user
+		uid_t newUid = get_uid_by_name(DROP_TO_USER);
+		gid_t newGid = get_gid_by_name(DROP_TO_USER);
+		if(newUid <= 0 || newGid <= 0)
+		{
+			bail("Unable to start server, could not drop privileges");
+		}
+
+		// Drop to group first
+		if(setgid(newGid) != 0)
+		{
+			bail("Unable to drop root group");
+		}
+
+		// Drop to user
+		if(setuid(newUid) != 0)
+		{
+			bail("Unable to drop root user");
+		}
+
+		// We really should be NOT root by now -- double check that
+		if(getuid() == 0)
+		{
+			bail("Could not drop privileges, bailing!"); 
+		}
+	}
+	
 
 	// Create the ChatManager object
 	ChatManager cm;
@@ -50,8 +121,7 @@ int main(int argc, char** argv)
 
 	if(server_sock_fd < 0)
 	{
-		cerr << "Error: could not create socket!" << endl;
-		return -1;
+		bail("Error: could not create socket!"); 
 	}
 
 	// Initialize address structure
@@ -66,28 +136,25 @@ int main(int argc, char** argv)
 	result = setsockopt(server_sock_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
 	if(result != 0)
 	{
-		cerr << "Error: could not set socket option (errno: " << errno << ")" << endl;
-		return -1;
+		bail("Error: could not set socket options");
 	}
 
 	// Bind
 	result = bind(server_sock_fd, (struct sockaddr*)&server_address, sizeof(server_address));
 	if(result != 0)
 	{
-		cerr << "Error: could not bind socket (errno: " << errno << ")" << endl;
-		return -1;
+		bail("Error: could not bind socket");
 	}
-	
+
 	// Listen for connections
 	result = listen(server_sock_fd, 10);
 	if(result != 0)
 	{
-		cerr << "Error: could not listen (errno: " << errno << ")" << endl;
 		close(server_sock_fd);
-		return -1;
+		bail("Error: could not listen on socket");
 	}
 
-	cout << "Server established, listening on port " << port_number << "..." << endl;
+	syslog(LOG_NOTICE, "Server established, listening on port %d", port_number);
 	try
 	{
 		while(true)
@@ -109,12 +176,13 @@ int main(int argc, char** argv)
 	} 
 	catch(const std::runtime_error& e)
 	{
-		cerr << "Error accepting connections!" << std::endl;
-		cerr << e.what() << endl;
+		close(server_sock_fd);
+		bail("Runtime Error while accepting connections");
 	}
 	catch(...)
 	{
-		cerr << "NAMELESS EVIL!" << endl;
+		close(server_sock_fd);
+		bail("GREMLINS DETECTED");
 	}
 
 	// Clean up the socket
@@ -122,4 +190,3 @@ int main(int argc, char** argv)
 
 	return 0;
 }
-

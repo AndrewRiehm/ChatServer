@@ -15,10 +15,9 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <fcntl.h>
+#include <syslog.h> // syslog!
 
-using std::cout;
 using std::endl;
-using std::cerr;
 using std::string;
 using std::chrono::seconds;
 using std::chrono::duration_cast;
@@ -108,8 +107,11 @@ void ChatServer::ClientHandler::HandleClient()
 				if(duration.count() > MAX_IDLE_SECONDS)
 				{
 					// Assume they've DCd
-					cerr << "ClientHandler::HandleClient()> " << _strUserName 
-					     << " has been idle too long." << endl;
+					syslog(
+						LOG_NOTICE, 
+						"Kicking inactive client %s", 
+						_strUserName.c_str()
+						);
 					WriteString("You've been idle for too long.\n");
 					break;
 				}
@@ -146,12 +148,14 @@ void ChatServer::ClientHandler::HandleClient()
 	} 
 	catch(const std::runtime_error& ex)
 	{
-		cerr << "ClientHandler::HandleClient()> Runtime error: " 
-				 << ex.what() << endl;
+		syslog(
+			LOG_ALERT, 
+			"ClientHandler::HandleClient()> Runtime error: %s", 
+			ex.what()); 
 	}
 	catch(...)
 	{
-		cerr << "ClientHandler::HandleClient()> GREMLINS DETECTED!" << endl;
+		syslog(LOG_ALERT, "ClientHandler::HandleClient()> GREMLINS DETECTED!"); 
 	}
 
 	ShutdownConnection();
@@ -383,7 +387,7 @@ void ChatServer::ClientHandler::LoginHandler()
 	}
 	catch(const std::runtime_error& ex)
 	{
-		cerr << "Couldn't login: " << ex.what() << endl;
+		syslog(LOG_NOTICE, "Problem with login: %s",ex.what());
 		_bDone = true;
 	}
 }
@@ -431,7 +435,7 @@ void ChatServer::ClientHandler::ShutdownConnection()
 	}
 	catch(...)
 	{
-		cerr << "Error shutting down, ignoring it..." << endl;
+		// Silently drop errors here - we're shutting down
 	}
 }
 
@@ -527,9 +531,12 @@ void ChatServer::ClientHandler::WriteString(const std::string& msg)
 
 void ChatServer::ClientHandler::Bail(const std::string err)
 {
-	cerr << "Error: " << err << " (errno: " << errno << ")" << endl;
-	cerr << "Thread id: " << std::this_thread::get_id() << endl;
-	cerr << "User name: " << _strUserName << endl;
+	syslog(
+		LOG_ALERT, 
+		"Bailing on client thread for user %s because %s",
+		_strUserName.c_str(),
+		err.c_str()
+		);
 	_bDone = true;
 }
 

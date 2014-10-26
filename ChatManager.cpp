@@ -1,14 +1,9 @@
-#include <iostream>
+#include <syslog.h>
 
 #include "ChatManager.hpp"
 #include "ClientHandler.hpp"
 
-using std::cout;
-using std::cerr;
-using std::endl;
-
 using std::vector;
-using std::map;
 using std::string;
 
 using ChatServer::ChatManager;
@@ -283,7 +278,7 @@ bool ChatManager::GuardedSend(const string& msg, const string& user)
 	}
 	catch(std::runtime_error  ex)
 	{
-		cerr << "ChatManager::GuardedSend()> Error: " << ex.what() << endl;
+		syslog(LOG_NOTICE, "ChatManager::GuardedSend()> Error: %s", ex.what());
 	}
 	return false;
 }
