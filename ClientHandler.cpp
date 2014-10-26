@@ -223,12 +223,22 @@ void ChatServer::ClientHandler::WhoHandler(const std::string& args)
 {
 	std::ostringstream str;
 	string roomName = _cm.GetProperRoomName(args);
+
+	if(roomName == "" && args != "")
+	{
+		// The room name they specified is not valid
+		str << "Room '" << args << "' does not exist." << endl;
+		WriteString(str.str());
+		return;
+	}
+
+	// Get the list of users in the given room
 	auto users = _cm.GetUsersIn(roomName);
 
-	// If they asked for an empty / nonexistant room...
+	// If they asked for an empty room...
 	if(users.size() == 0 && roomName != "")
 	{
-		str << "Room '" << args << "' does not exist." << endl;
+		str << "Room '" << roomName << "' is empty." << endl;
 		WriteString(str.str());
 		return;
 	}
