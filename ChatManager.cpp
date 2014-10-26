@@ -128,7 +128,10 @@ void ChatManager::RemoveUserFromRoom(const std::string& room, const std::string&
 					// If there's nobody in the room, delete it.
 					_mRooms.erase(room);
 				}
-				_mClients[userName]->SendMsg("* You have left " + room + "\n");
+
+				// If the user is still connected, send a notification
+				if(_mClients.find(userName) != _mClients.end())
+					_mClients[userName]->SendMsg("* You have left " + room + "\n");
 				break;
 			}
 		}
@@ -164,15 +167,17 @@ void ChatManager::RemoveClient(ChatServer::ClientHandler* client)
 	string room = client->GetCurrentRoom();
 	string userName = client->GetUserName();
 
-	RemoveUserFromRoom(room, userName);
-
 	// Remove the user from the list of clients
-	std::lock_guard<std::mutex> lock(_mMutex);
-	auto it=_mClients.find(client->GetUserName());
-	if(it != _mClients.end())
 	{
-		_mClients.erase(it);
+		std::lock_guard<std::mutex> lock(_mMutex);
+		auto it=_mClients.find(userName);
+		if(it != _mClients.end())
+		{
+			_mClients.erase(it);
+		}
 	}
+
+	RemoveUserFromRoom(room, userName);
 }
 
 void ChatManager::SwitchRoom(
