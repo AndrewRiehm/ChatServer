@@ -29,9 +29,11 @@ using ChatServer::Command;
 ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 	: _iSocketFD(fd), _cm(cm), _bDone(false)
 {
+	/* This only works on BSD systems, not linux...
 	// Make sure we ignore SIGPIPE (writing to closed connection)
 	int set = 1;
 	setsockopt(_iSocketFD, SOL_SOCKET, SO_NOSIGPIPE, (void *)&set, sizeof(int));
+	*/
 
 	//-------------------------------------------------------
 	// Set up the command objects
@@ -510,7 +512,8 @@ void ChatServer::ClientHandler::WriteString(const std::string& msg)
 	}
 
 	// Send the message
-	int result = write(_iSocketFD, msg.c_str(), sizeof(char)*msg.length());
+	int flags = 0; //  | MSG_NOSIGNAL; <-- only works on linux?
+	int result = send(_iSocketFD, msg.c_str(), sizeof(char)*msg.length(), flags);
 	if(result < 0)
 	{
 		Bail("could not write to client socket");
