@@ -90,7 +90,6 @@ int main(int argc, char** argv)
 	cout << "Server established, listening on port " << port_number << "..." << endl;
 	try
 	{
-		vector<thread> my_threads;
 		while(true)
 		{
 			// Accept the connection, spawn a new thread to handle it
@@ -104,7 +103,8 @@ int main(int argc, char** argv)
 				continue;
 			}
 
-			my_threads.push_back(thread(start_processing, client_sock_fd, std::ref(cm)));
+			thread t(start_processing, client_sock_fd, std::ref(cm));
+			t.detach();
 		}
 	} 
 	catch(const std::runtime_error& e)
