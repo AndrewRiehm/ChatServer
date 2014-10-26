@@ -4,3 +4,5 @@ project (ChatServer)
 add_definitions(-std=c++11)
 
 add_executable(chat_server Server.cpp ClientHandler.cpp ChatManager.cpp)
+
+target_link_libraries(chat_server pthread)
