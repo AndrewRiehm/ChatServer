@@ -381,28 +381,35 @@ void ChatServer::ClientHandler::ShutdownConnection()
 	// Don't want any more reading / writing
 	std::lock_guard<std::mutex> lock(_mMutex);
 
-	// Tell the main loop we're done
-	_bDone = true;
-
-	// Tell the OS we're not writing any more
-	shutdown(_iSocketFD, SHUT_WR);
-
-	// Put the socket in non-blocking mode
-	// (we don't want a blocking read call to hold us up)
-	fcntl(_iSocketFD, F_SETFL, O_NONBLOCK);
-
-	// Read any remaining data, throw it away
-	const int BUF_SIZE = 256;
-	char buf[BUF_SIZE];
-	int bytesRead = 0;
-	do
+	try
 	{
-		bytesRead = recv(_iSocketFD, buf, BUF_SIZE, 0);
-	}
-	while(bytesRead > 0);
+		// Tell the main loop we're done
+		_bDone = true;
 
-	// Tell the OS we're not reading any more
-	shutdown(_iSocketFD, SHUT_RD);
+		// Tell the OS we're not writing any more
+		shutdown(_iSocketFD, SHUT_WR);
+
+		// Put the socket in non-blocking mode
+		// (we don't want a blocking read call to hold us up)
+		fcntl(_iSocketFD, F_SETFL, O_NONBLOCK);
+
+		// Read any remaining data, throw it away
+		const int BUF_SIZE = 256;
+		char buf[BUF_SIZE];
+		int bytesRead = 0;
+		do
+		{
+			bytesRead = recv(_iSocketFD, buf, BUF_SIZE, 0);
+		}
+		while(bytesRead > 0);
+
+		// Tell the OS we're not reading any more
+		shutdown(_iSocketFD, SHUT_RD);
+	}
+	catch(...)
+	{
+		cerr << "Error shutting down, ignoring it..." << endl;
+	}
 }
 
 void ChatServer::ClientHandler::ListCommands()
