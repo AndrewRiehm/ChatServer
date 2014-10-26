@@ -24,8 +24,8 @@ using std::thread;
 using ChatServer::ClientHandler;
 using ChatServer::ChatManager;
 
-const char* DROP_TO_USER = "chatserv";
-const char* DROP_TO_GROUP = "chatgroup";
+const char* DROP_TO_USER = "chatd";
+const char* DROP_TO_GROUP = "chatdgrp";
 
 void start_processing(int fd, ChatManager& cm)
 {
