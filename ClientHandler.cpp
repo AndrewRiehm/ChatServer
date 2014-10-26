@@ -20,12 +20,19 @@ using std::cout;
 using std::endl;
 using std::cerr;
 using std::string;
+using std::chrono::seconds;
+using std::chrono::duration_cast;
+using std::chrono::steady_clock;
 
 using ChatServer::Command;
 
 ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 	: _iSocketFD(fd), _cm(cm), _bDone(false)
 {
+	// Make sure we ignore SIGPIPE (writing to closed connection)
+	int set = 1;
+	setsockopt(_iSocketFD, SOL_SOCKET, SO_NOSIGPIPE, (void *)&set, sizeof(int));
+
 	//-------------------------------------------------------
 	// Set up the command objects
 	//-------------------------------------------------------
@@ -93,6 +100,17 @@ void ChatServer::ClientHandler::HandleClient()
 			// See if there's a message from the client
 			if(!DataPending())
 			{
+				// If it's been too long since they sent anything, assume they DCd
+				auto duration = duration_cast<seconds>(steady_clock::now() - _tLastRead);
+				if(duration.count() > MAX_IDLE_SECONDS)
+				{
+					// Assume they've DCd
+					cerr << "ClientHandler::HandleClient()> " << _strUserName 
+					     << " has been idle too long." << endl;
+					WriteString("You've been idle for too long.\n");
+					break;
+				}
+
 				// Nothing to read, or empty message
 				// So sleep for a bit - don't want to spin as fast as possible...
 				std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -118,19 +136,19 @@ void ChatServer::ClientHandler::HandleClient()
 			{
 				// They're not in a chat room, and they didn't issue a command
 				// So suggest something helpful
-				WriteString("Please join a chat room before trying to post a message.\n");
+				WriteString("Please join a chat room before posting a message.\n");
 				ListCommands();
 			}
 		}
 	} 
 	catch(const std::runtime_error& ex)
 	{
-		cerr << "Something REALLY bad happened." << endl;
-		cerr << ex.what() << endl;
+		cerr << "ClientHandler::HandleClient()> Runtime error: " 
+				 << ex.what() << endl;
 	}
 	catch(...)
 	{
-		cerr << "NAMELESS EVIL!" << endl;
+		cerr << "ClientHandler::HandleClient()> GREMLINS DETECTED!" << endl;
 	}
 
 	ShutdownConnection();
@@ -147,7 +165,8 @@ void ChatServer::ClientHandler::ListRoomsHandler(const std::string& args)
 	// If there aren't any rooms, let them know.
 	if(roomNames.size() <= 0)
 	{
-		WriteString("No active rooms.  Make one with '/join " + _strUserName + "sPartyTimeLounge'!\n");
+		WriteString("No active rooms.  Make one with '/join " 
+							  + _strUserName + "sPartyTimeLounge'!\n");
 		return;
 	}
 
@@ -183,7 +202,7 @@ void ChatServer::ClientHandler::JoinRoomHandler(const std::string& args)
 		     ('a' <= args[i] && args[i] <= 'z') || 
 				 ('0' <= args[i] && args[i] <= '9')))
 		{
-			WriteString("Invalid room name - must be one word, with only letters and numbers.\n");
+			WriteString("Invalid room name - only letters and numbers allowed.\n");
 			return;
 		}
 	}
@@ -324,7 +343,7 @@ void ChatServer::ClientHandler::LoginHandler()
 				     ('a' <= c && c <= 'z')))
 				{
 				 	// If there's an invalid character, TRY AGAIN
-					WriteString("Invalid user name - must only contain letters. Try again!\n");
+					WriteString("Invalid user name: only letters allowed. Try again!\n");
 					_strUserName = "";
 					break;
 				}
@@ -351,7 +370,8 @@ void ChatServer::ClientHandler::LoginHandler()
 
 		if(tries_left <= 0)
 		{
-			WriteString("Max number of attempts reached.  No soup for you!  Come back one year!\n");
+			WriteString("Max number of attempts reached.  "  
+									"No soup for you!  Come back one year!\n");
 			Bail("too many invalid login attempts");
 		}
 
@@ -417,7 +437,8 @@ void ChatServer::ClientHandler::ListCommands()
 	string msg = "Available commands:\n";
 	for(auto& item: _mCommands)
 	{
-		msg += "\t" + item.second.strString + ": " + item.second.strDescription + "\n";
+		msg += "\t" + item.second.strString + ": " 
+		       + item.second.strDescription + "\n";
 	}
 	WriteString(msg);
 }
@@ -443,13 +464,21 @@ std::string ChatServer::ClientHandler::ReadString()
 	int bytesAvailable = 0;
 	do
 	{
-		bytesRead = read(_iSocketFD, buffer, BUF_SIZE);
+		bytesRead = recv(_iSocketFD, buffer, BUF_SIZE, 0);
+
+		if(bytesRead == 0)
+		{
+			throw std::runtime_error("Client disconnect detected in ReadString()");
+		}
 
 		if(bytesRead < 0)
 		{
-			// Bail("could not read from client socket");
 			throw std::runtime_error("could not read from client socket.");
 		}
+
+		// Make a note of when this read happened
+		_tLastRead = std::chrono::steady_clock::now();
+
 		msg += buffer;
 		ioctl(_iSocketFD, FIONREAD, &bytesAvailable);
 	}
@@ -492,6 +521,7 @@ void ChatServer::ClientHandler::Bail(const std::string err)
 {
 	cerr << "Error: " << err << " (errno: " << errno << ")" << endl;
 	cerr << "Thread id: " << std::this_thread::get_id() << endl;
+	cerr << "User name: " << _strUserName << endl;
 	_bDone = true;
 }
 
@@ -579,7 +609,7 @@ bool ChatServer::ClientHandler::DataPending()
 	int bytesAvailable = 0;
 	if(ioctl(_iSocketFD, FIONREAD, &bytesAvailable) < 0)
 	{
-		throw std::runtime_error("Could not run ioctl to determine bytes available.");
+		throw std::runtime_error("Could not run ioctl to get bytes available.");
 	}
 
 	return bytesAvailable > 0;
@@ -603,4 +633,9 @@ void ChatServer::ClientHandler::SetCurrentRoom(const std::string& room)
 {
 	std::lock_guard<std::mutex> lock(_mMutex);
 	_strCurrentRoom = room;
+}
+
+bool ChatServer::ClientHandler::StillValid()
+{
+	return !_bDone;
 }

@@ -4,6 +4,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <chrono>
 #include "Command.hpp"
 
 namespace ChatServer
@@ -35,6 +36,7 @@ class ClientHandler
 {
 private:
 	const int MAX_USER_NAME_LENGTH = 30; // Make sure user names aren't too big
+	const int MAX_IDLE_SECONDS = 300; // If no msgs in 5 minutes, kick them!
 
 	std::mutex _mMutex; // To avoid threading issues when reading/writing
 	ChatManager& _cm;
@@ -43,6 +45,7 @@ private:
 	std::string _strUserName; // User name associated with this connection
 	std::string _strCurrentRoom; // Name of room this user is currently in
 	bool _bDone; // Set to false to kill the connection and stop the thread
+	std::chrono::steady_clock::time_point _tLastRead; // Detecting DCs/inactive
 
 	/** Shuts down the socket and cleans up any remaining data **/
 	void ShutdownConnection();
@@ -114,6 +117,9 @@ public:
 
 	/** Sends the given message to the user. **/
 	void SendMsg(const std::string& msg);
+
+	/** If this returns false, this client is going away soon. **/
+	bool StillValid();
 };
 
 }

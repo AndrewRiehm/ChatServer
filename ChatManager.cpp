@@ -101,7 +101,9 @@ bool ChatManager::AddClient(ChatServer::ClientHandler* client)
 	return false;
 }
 
-void ChatManager::RemoveUserFromRoom(const std::string& room, const std::string& userName)
+void ChatManager::RemoveUserFromRoom(
+			const std::string& room, 
+			const std::string& userName)
 {
 	std::lock_guard<std::mutex> lock(_mMutex);
 
@@ -130,8 +132,7 @@ void ChatManager::RemoveUserFromRoom(const std::string& room, const std::string&
 				}
 
 				// If the user is still connected, send a notification
-				if(_mClients.find(userName) != _mClients.end())
-					_mClients[userName]->SendMsg("* You have left " + room + "\n");
+				GuardedSend("* You have left " + room + "\n", userName);
 				break;
 			}
 		}
@@ -229,7 +230,7 @@ void ChatManager::PostMsgToRoom(
 	// Make sure room exists!
 	if(_mRooms.find(roomName) == _mRooms.end())
 	{
-		_mClients[fromUser]->SendMsg("Invalid room (" + roomName + ")!\n");
+		GuardedSend("Invalid room (" + roomName + ")!\n", fromUser);
 		return;
 	}
 
@@ -249,11 +250,48 @@ void ChatManager::PostMsgToRoom(
 	// Send it to all associated users
 	for(auto& user: users)
 	{
-		_mClients[user]->SendMsg(m);
+		GuardedSend(m, user);
 	}
 }
 
-void ChatManager::SendMsgToUser(const string& msg, const string& fromUser, const string& toUser)
+bool ChatManager::GuardedSend(const string& msg, const string& user)
+{
+	try
+	{
+		if(_mClients.find(user) == _mClients.end())
+		{
+			// User doesn't exist!
+			throw std::runtime_error(user + " does not exist!");
+		}
+
+		if(_mClients[user] == NULL)
+		{
+			// Pointer is dead
+			_mClients.erase(user);
+			throw std::runtime_error(user + " points at a null client!");
+		}
+
+		if(_mClients[user]->StillValid())
+		{
+			_mClients[user]->SendMsg(msg);
+			return true;
+		}
+		else
+		{
+			throw std::runtime_error(user + " is leaving!");
+		}
+	}
+	catch(std::runtime_error  ex)
+	{
+		cerr << "ChatManager::GuardedSend()> Error: " << ex.what() << endl;
+	}
+	return false;
+}
+
+void ChatManager::SendMsgToUser(
+			const string& msg, 
+			const string& fromUser, 
+			const string& toUser)
 {
 	string capsToUser = ToUpper(toUser);
 	string capsFromUser = ToUpper(fromUser);
@@ -278,21 +316,31 @@ void ChatManager::SendMsgToUser(const string& msg, const string& fromUser, const
 	{
 		// If we don't have a valid destination, then this makes no sense
 		// COMPLAIN LOUDLY!
-		throw std::runtime_error("Invalid users in SendMsgToUser (" + fromUser + ", " + toUser + ")");
+		throw std::runtime_error(
+			"Invalid users in SendMsgToUser (" + fromUser + ", " + toUser + ")"
+			);
 	}
 
 	if(clientFrom != NULL)
 	{
-		// We might not have a valid "from" user - but if we do, show this
-		clientFrom->SendMsg("You whisper to " + clientTo->GetUserName() + ": " + msg + "\n");
-
 		// Send the message to the target
-		clientTo->SendMsg(clientFrom->GetUserName() + " whispers: " + msg + "\n");
+		if(GuardedSend(clientFrom->GetUserName() + " whispers: " + msg + "\n", 
+									 clientTo->GetUserName()))
+		{
+			// We might not have a valid "from" user - but if we do, show this
+			GuardedSend("You whisper to " + clientTo->GetUserName() + ": " + msg 
+									+ "\n", clientFrom->GetUserName());
+		}
+		else
+		{
+			// If we couldn't send the message, notify the sender.
+			GuardedSend(toUser + " is not here.\n", clientFrom->GetUserName());
+		}
 	}
 	else
 	{
 		// Send the message to the target
-		clientTo->SendMsg(fromUser + " whispers: " + msg + "\n");
+		GuardedSend(fromUser + " whispers: " + msg + "\n", clientTo->GetUserName());
 
 		// The "from" might be from the sys admin, or $DEITY, or an AI, in which
 		// case we just show "$DEITY whispers: <msg>", but we don't need to (and 

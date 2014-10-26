@@ -32,6 +32,9 @@ private:
 	// Removes a user from the room, if they exist, and deletes the room if empty.
 	void RemoveUserFromRoom(const std::string& room, const std::string& userName);
 
+	// Sends a message to the client, checking for errors
+	bool GuardedSend(const std::string& msg, const std::string& user);
+
 public:
 	ChatManager();
 	~ChatManager();
