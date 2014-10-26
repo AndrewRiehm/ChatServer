@@ -29,11 +29,12 @@ using ChatServer::Command;
 ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 	: _iSocketFD(fd), _cm(cm), _bDone(false)
 {
-	/* This only works on BSD systems, not linux...
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 	// Make sure we ignore SIGPIPE (writing to closed connection)
+	// Only works on BSD-based systems
 	int set = 1;
 	setsockopt(_iSocketFD, SOL_SOCKET, SO_NOSIGPIPE, (void *)&set, sizeof(int));
-	*/
+#endif
 
 	//-------------------------------------------------------
 	// Set up the command objects
@@ -512,7 +513,11 @@ void ChatServer::ClientHandler::WriteString(const std::string& msg)
 	}
 
 	// Send the message
-	int flags = 0; //  | MSG_NOSIGNAL; <-- only works on linux?
+#ifdef __linux
+	int flags = 0 | MSG_NOSIGNAL; // <-- Prevents SIGPIPE (among other things)
+#else
+	int flags = 0;
+#endif
 	int result = send(_iSocketFD, msg.c_str(), sizeof(char)*msg.length(), flags);
 	if(result < 0)
 	{
