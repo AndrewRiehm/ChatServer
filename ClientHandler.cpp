@@ -13,6 +13,8 @@
 #include <thread>
 
 #include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <fcntl.h>
 
 using std::cout;
 using std::endl;
@@ -73,6 +75,7 @@ ChatServer::ClientHandler::ClientHandler(int fd, ChatManager& cm)
 
 ChatServer::ClientHandler::~ClientHandler()
 {
+	_cm.RemoveClient(this);
 	close(_iSocketFD);
 }
 
@@ -80,11 +83,11 @@ void ChatServer::ClientHandler::HandleClient()
 {
 	int result = 0;
 
-	// Make them login first
-	LoginHandler();
-
 	try
 	{
+		// Make them login first
+		LoginHandler();
+
 		while(!_bDone)
 		{
 			// See if there's a message from the client
@@ -129,6 +132,8 @@ void ChatServer::ClientHandler::HandleClient()
 	{
 		cerr << "NAMELESS EVIL!" << endl;
 	}
+
+	ShutdownConnection();
 }
 
 //---------------------------------------------------------
@@ -371,6 +376,35 @@ void ChatServer::ClientHandler::QuitHandler(std::string args)
 // Utility functions
 //---------------------------------------------------------
 
+void ChatServer::ClientHandler::ShutdownConnection()
+{
+	// Don't want any more reading / writing
+	std::lock_guard<std::mutex> lock(_mMutex);
+
+	// Tell the main loop we're done
+	_bDone = true;
+
+	// Tell the OS we're not writing any more
+	shutdown(_iSocketFD, SHUT_WR);
+
+	// Put the socket in non-blocking mode
+	// (we don't want a blocking read call to hold us up)
+	fcntl(_iSocketFD, F_SETFL, O_NONBLOCK);
+
+	// Read any remaining data, throw it away
+	const int BUF_SIZE = 256;
+	char buf[BUF_SIZE];
+	int bytesRead = 0;
+	do
+	{
+		bytesRead = recv(_iSocketFD, buf, BUF_SIZE, 0);
+	}
+	while(bytesRead > 0);
+
+	// Tell the OS we're not reading any more
+	shutdown(_iSocketFD, SHUT_RD);
+}
+
 void ChatServer::ClientHandler::ListCommands()
 {
 	string msg = "Available commands:\n";
@@ -389,6 +423,7 @@ void ChatServer::ClientHandler::SendMsg(const std::string& msg)
 std::string ChatServer::ClientHandler::ReadString()
 {
 	const int BUF_SIZE = 512;
+	const int MAX_MSG_SIZE = 1024;
 	int bytesRead = 0;
 	char buffer[BUF_SIZE];
 	memset(buffer, '\0', BUF_SIZE);
@@ -411,10 +446,10 @@ std::string ChatServer::ClientHandler::ReadString()
 		msg += buffer;
 		ioctl(_iSocketFD, FIONREAD, &bytesAvailable);
 	}
-	while(msg.length() < 4096 && bytesAvailable > 0);
+	while(msg.length() < MAX_MSG_SIZE && bytesAvailable > 0);
 
 	// If we get here, and the buffer is at the cap, but there's more data...
-	if(msg.length() >= 4096 && bytesAvailable > 0)
+	if(msg.length() >= MAX_MSG_SIZE && bytesAvailable > 0)
 	{
 		// The client sent way too much stuff, time to kick them
 		throw std::runtime_error("client sent too much data");
@@ -426,6 +461,19 @@ std::string ChatServer::ClientHandler::ReadString()
 void ChatServer::ClientHandler::WriteString(const std::string& msg)
 {
 	std::lock_guard<std::mutex> lock(_mMutex);
+
+	// Make sure the socket is in a valid state before trying to send
+	int error = 0;
+	socklen_t len = sizeof (error);
+	int retval = getsockopt (_iSocketFD, SOL_SOCKET, SO_ERROR, &error, &len );
+	if(retval != 0)
+	{
+		// Problem with the socket, we should bail
+		Bail("socket error detected before writing, aborting");
+		return;
+	}
+
+	// Send the message
 	int result = write(_iSocketFD, msg.c_str(), sizeof(char)*msg.length());
 	if(result < 0)
 	{

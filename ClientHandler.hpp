@@ -44,6 +44,9 @@ private:
 	std::string _strCurrentRoom; // Name of room this user is currently in
 	bool _bDone; // Set to false to kill the connection and stop the thread
 
+	/** Shuts down the socket and cleans up any remaining data **/
+	void ShutdownConnection();
+
 	/**  Sends a list of commands to the connected client **/
 	void ListCommands();
 
