@@ -2,6 +2,7 @@
 #define CHAT_MANAGER_HPP
 
 #include <map>
+#include <mutex>
 #include <vector>
 #include <string>
 
