@@ -81,7 +81,7 @@ int main(int argc, char** argv)
 	{
 		// Try to switch to the chatserv user
 		uid_t newUid = get_uid_by_name(DROP_TO_USER);
-		gid_t newGid = get_gid_by_name(DROP_TO_USER);
+		gid_t newGid = get_gid_by_name(DROP_TO_GROUP);
 		if(newUid <= 0 || newGid <= 0)
 		{
 			bail("Unable to start server, could not drop privileges");
