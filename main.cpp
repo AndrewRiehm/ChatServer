@@ -50,6 +50,19 @@ gid_t get_gid_by_name(const char *name)
 	throw std::runtime_error("Invalid group name");
 }
 
+void bail(const char* msg)
+{
+	// Log the error
+	syslog(LOG_ALERT, "Bailing: %s", msg);
+	syslog(LOG_ALERT, "Errno: %s", strerror(errno));
+
+	// Close out the logs
+	closelog();
+
+	// Exit with EXIT_FAILURE
+	exit(EXIT_FAILURE);
+}
+
 void drop_from_root()
 {
 	try
@@ -83,19 +96,6 @@ void drop_from_root()
 		syslog(LOG_ALERT, "Error dropping privileges: %s", err.what());
 		bail("Unable to start, could not switch to uid:gid of chatd:chatgrp");
 	}
-}
-
-void bail(const char* msg)
-{
-	// Log the error
-	syslog(LOG_ALERT, "Bailing: %s", msg);
-	syslog(LOG_ALERT, "Errno: %s", strerror(errno));
-
-	// Close out the logs
-	closelog();
-
-	// Exit with EXIT_FAILURE
-	exit(EXIT_FAILURE);
 }
 
 int main(int argc, char** argv)
