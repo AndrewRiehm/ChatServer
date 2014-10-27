@@ -24,30 +24,11 @@ using ChatServer::ClientHandler;
 using ChatServer::ChatManager;
 
 const char* DROP_TO_USER = "chatd";
-const char* DROP_TO_GROUP = "chatdgrp";
 
 void start_processing(int fd, ChatManager& cm)
 {
 	ClientHandler ch(fd, cm);
 	ch.HandleClient();
-}
-
-uid_t get_uid_by_name(const char *name)
-{
-	if(name) {
-		struct passwd *pwd = getpwnam(name); /* don't free, see getpwnam() for details */
-		if(pwd != NULL) return pwd->pw_uid;
-	}
-	throw std::runtime_error("Invalid user name");
-}
-
-gid_t get_gid_by_name(const char *name)
-{
-	if(name) {
-		struct passwd *pwd = getpwnam(name); /* don't free, see getpwnam() for details */
-		if(pwd != NULL) return pwd->pw_gid;
-	}
-	throw std::runtime_error("Invalid group name");
 }
 
 void bail(const char* msg)
@@ -67,9 +48,14 @@ void drop_from_root()
 {
 	try
 	{
-		// Try to switch to the chatserv user
-		uid_t newUid = get_uid_by_name(DROP_TO_USER);
-		gid_t newGid = get_gid_by_name(DROP_TO_GROUP);
+		// Try to switch to the right user
+		struct passwd *pwd = getpwnam(DROP_TO_USER); /* don't free, see getpwnam() for details */
+		if(pwd == NULL) 
+		{
+			throw std::runtime_error("Invalid user name");
+		}
+		uid_t newUid = pwd->pw_uid;
+		gid_t newGid = pwd->pw_gid;
 
 		// Drop to group first
 		if(setgid(newGid) != 0)
@@ -94,7 +80,8 @@ void drop_from_root()
 	catch(const std::runtime_error& err)
 	{
 		syslog(LOG_ALERT, "Error dropping privileges: %s", err.what());
-		bail("Unable to start, could not switch to uid:gid of chatd:chatgrp");
+		syslog(LOG_ALERT, "Could not switch to uid:gid for %s", DROP_TO_USER);
+		bail("Unable to start, could not switch uid:gid");
 	}
 }
 
