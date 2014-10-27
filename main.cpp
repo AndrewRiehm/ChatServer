@@ -15,7 +15,6 @@
 #include "ChatManager.hpp"
 #include "ClientHandler.hpp"
 
-using std::cout;
 using std::cerr;
 using std::endl;
 using std::vector;
@@ -37,18 +36,53 @@ uid_t get_uid_by_name(const char *name)
 {
 	if(name) {
 		struct passwd *pwd = getpwnam(name); /* don't free, see getpwnam() for details */
-		if(pwd) return pwd->pw_uid;
+		if(pwd != NULL) return pwd->pw_uid;
 	}
-	return -1;
+	throw std::runtime_error("Invalid user name");
 }
 
 gid_t get_gid_by_name(const char *name)
 {
 	if(name) {
 		struct passwd *pwd = getpwnam(name); /* don't free, see getpwnam() for details */
-		if(pwd) return pwd->pw_gid;
+		if(pwd != NULL) return pwd->pw_gid;
 	}
-	return -1;
+	throw std::runtime_error("Invalid group name");
+}
+
+void drop_from_root()
+{
+	try
+	{
+		// Try to switch to the chatserv user
+		uid_t newUid = get_uid_by_name(DROP_TO_USER);
+		gid_t newGid = get_gid_by_name(DROP_TO_GROUP);
+
+		// Drop to group first
+		if(setgid(newGid) != 0)
+		{
+			bail("Unable to drop to chatdrp group - "
+					"this might mean you need to create it!");
+		}
+
+		// Drop to user
+		if(setuid(newUid) != 0)
+		{
+			bail("Unable to drop to chatd user - "
+					"this might mean you need to create it!"); 
+		}
+
+		// We really should be NOT root by now -- double check that
+		if(getuid() == 0)
+		{
+			bail("Still root after trying to drop to chatd:chatdgrp, bailing!");
+		}
+	}
+	catch(const std::runtime_error& err)
+	{
+		syslog(LOG_ALERT, "Error dropping privileges: %s", err.what());
+		bail("Unable to start, could not switch to uid:gid of chatd:chatgrp");
+	}
 }
 
 void bail(const char* msg)
@@ -79,33 +113,9 @@ int main(int argc, char** argv)
 	// We don't want to run as root - that's bad!
 	if(getuid() == 0)
 	{
-		// Try to switch to the chatserv user
-		uid_t newUid = get_uid_by_name(DROP_TO_USER);
-		gid_t newGid = get_gid_by_name(DROP_TO_GROUP);
-		if(newUid <= 0 || newGid <= 0)
-		{
-			bail("Unable to start server, could not drop privileges");
-		}
-
-		// Drop to group first
-		if(setgid(newGid) != 0)
-		{
-			bail("Unable to drop root group");
-		}
-
-		// Drop to user
-		if(setuid(newUid) != 0)
-		{
-			bail("Unable to drop root user");
-		}
-
-		// We really should be NOT root by now -- double check that
-		if(getuid() == 0)
-		{
-			bail("Could not drop privileges, bailing!"); 
-		}
+		// So if we're currently root, DROP to chatd:chatgrp
+		drop_from_root();
 	}
-	
 
 	// Create the ChatManager object
 	ChatManager cm;
@@ -133,14 +143,24 @@ int main(int argc, char** argv)
 
 	// Make sure the port is not in use.
 	int yes = 1;
-	result = setsockopt(server_sock_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+	result = setsockopt(
+					   server_sock_fd, 
+						 SOL_SOCKET, 
+						 SO_REUSEADDR, 
+						 &yes, 
+						 sizeof(int)
+						 );
 	if(result != 0)
 	{
 		bail("Error: could not set socket options");
 	}
 
 	// Bind
-	result = bind(server_sock_fd, (struct sockaddr*)&server_address, sizeof(server_address));
+	result = bind(
+					   server_sock_fd, 
+						 (struct sockaddr*)&server_address, 
+						 sizeof(server_address)
+						 );
 	if(result != 0)
 	{
 		bail("Error: could not bind socket");
@@ -154,18 +174,27 @@ int main(int argc, char** argv)
 		bail("Error: could not listen on socket");
 	}
 
-	syslog(LOG_NOTICE, "Server established, listening on port %d", port_number);
+	syslog(
+		LOG_NOTICE, 
+		"Server established, listening on port %d", 
+		port_number
+		);
 	try
 	{
 		while(true)
 		{
 			// Accept the connection, spawn a new thread to handle it
 			client_length = sizeof(client_address);
-			client_sock_fd = accept(server_sock_fd, (struct sockaddr*)&client_address, &client_length);
+			client_sock_fd = accept(
+											   server_sock_fd, 
+												 (struct sockaddr*)&client_address, 
+												 &client_length);
 
 			if(client_sock_fd < 0)
 			{
-				cerr << "Error: could not accept client (errno: " << errno << ")" << endl;
+				// IF there's a problem, close the socket and continue.
+				// If we logged every invalid connection attempt, we'd probably fill 
+				// up on logs PDQ.
 				close(client_sock_fd);
 				continue;
 			}
